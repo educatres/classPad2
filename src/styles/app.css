@@ -207,6 +207,9 @@ button:disabled {
   color: #fff;
   box-shadow: var(--shadow);
 }
+.home-page .hero {
+  border-radius: 5px;
+}
 .hero h1 {
   font-size: clamp(1.15rem, 3vw, 2.4rem);
   line-height: 1.05;
@@ -247,6 +250,9 @@ button:disabled {
   background: #fff9df;
   border-radius: 14px;
 }
+.home-page .notice {
+  border-radius: 5px;
+}
 .muted {
   color: #6d7f88;
   font-weight: 400;
@@ -282,6 +288,10 @@ button:disabled {
   padding: 1.3rem;
   box-shadow: var(--shadow);
 }
+.home-page .class-card,
+.home-page .privacy-note {
+  border-radius: 5px;
+}
 .class-card h3 {
   margin: 0.2rem 0;
 }
@@ -306,6 +316,9 @@ button:disabled {
   border-radius: 18px;
   background: var(--card);
   box-shadow: var(--shadow);
+}
+.home-page .all-class-list {
+  border-radius: 5px;
 }
 .all-class-row {
   display: flex;
@@ -369,6 +382,9 @@ button:disabled {
   background: var(--card);
   box-shadow: var(--shadow);
   font-weight: 750;
+}
+.home-page .class-stat-card {
+  border-radius: 5px;
 }
 .class-stat-card.active {
   border-color: #a9dcca;
