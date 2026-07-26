@@ -2,6 +2,7 @@ import { get, onValue, ref, set, update } from "firebase/database";
 import { database } from "./config.js";
 import { randomId, teacherAccessKey } from "../utils/random.js";
 import { CLASSROOM_TTL_MS, isClassroomExpired, serverNow } from "../utils/classroomExpiration.js";
+import { isProtectedClassroom } from "../utils/protectedClassrooms.js";
 
 export async function createClassroom(uid, values) {
   const classId = randomId(10);
@@ -59,6 +60,7 @@ export async function closeClassroom(classId, closed) { await update(ref(databas
 export async function setStudentPinned(classId, studentId, pinned) { await set(ref(database, `classes/${classId}/pinnedStudents/${studentId}`), pinned ? true : null); }
 async function readValue(path) { return (await get(ref(database, path))).val(); }
 export async function deleteClassroom(classId, uid, classroom, students) {
+  if (isProtectedClassroom(classId)) throw new Error("此展示用課程受到保護，無法刪除。");
   const inviteTokens = Object.keys(classroom.teacherInviteTokens || {}), displayToken = classroom.displayToken || null;
   const [invites, display, lookups] = await Promise.all([
     Promise.all(inviteTokens.map((token) => readValue(`teacherInvites/${token}`))),
@@ -80,6 +82,7 @@ export async function deleteClassroom(classId, uid, classroom, students) {
   await update(ref(database), changes);
 }
 export async function cleanupExpiredClassroom(classId, uid, classroom, knownStudents) {
+  if (isProtectedClassroom(classId)) return false;
   if (!isClassroomExpired(classroom)) return false;
   const students = knownStudents || (await Promise.all(Object.keys(classroom.studentOrder || {}).map(async (id) => {
     const value = (await get(ref(database, `students/${id}`))).val();

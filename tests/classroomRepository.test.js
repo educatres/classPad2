@@ -95,6 +95,13 @@ describe("課程建立與到期清理", () => {
     expect(changes).not.toHaveProperty("boards/stale-board");
   });
 
+  it("展示用課程不得手動或到期自動刪除", async () => {
+    const classroom = { expiresAt: 1, admins: { teacher: true } };
+    await expect(deleteClassroom("NWZvyxywKc", "teacher", classroom, [])).rejects.toThrow("受到保護");
+    await expect(cleanupExpiredClassroom("NWZvyxywKc", "teacher", classroom, [])).resolves.toBe(false);
+    expect(databaseMocks.update).not.toHaveBeenCalled();
+  });
+
   it("未到期時不執行清理", async () => {
     await expect(cleanupExpiredClassroom("class-1", "teacher", { expiresAt: Date.now() + 60_000 })).resolves.toBe(false);
     expect(databaseMocks.update).not.toHaveBeenCalled();
