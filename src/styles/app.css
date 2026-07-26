@@ -253,6 +253,14 @@ button:disabled {
 .home-page .notice {
   border-radius: 5px;
 }
+.intro-notice-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+.intro-notice-show {
+  margin: 1.3rem 0;
+}
 .muted {
   color: #6d7f88;
   font-weight: 400;
