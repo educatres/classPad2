@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? "/firebase-live-whiteboard/" : "/",
+  base: process.env.GITHUB_ACTIONS ? "/classpad/" : "/",
   build: {
     outDir: "dist",
     sourcemap: true,
