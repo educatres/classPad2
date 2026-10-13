@@ -18,6 +18,7 @@ const token = param("board");
 const message = document.querySelector("#boardMessage");
 const stage = document.querySelector("#boardStage");
 const toolbar = document.querySelector("#studentToolbar");
+const smoothingButton = document.querySelector("#studentSmoothing");
 const sync = document.querySelector("#syncBadge");
 let user, student, engine, stickyNotes, textLayer, presenceStop, expirationOff, expirationTimerOff, expired = false;
 let pages = normalizeBoardPages();
@@ -26,8 +27,21 @@ let pageOffs = [], lifecycleOffs = [];
 let activeTimer;
 let presenceDrawing = false;
 let lastActivityAt = 0, lastActivityPageId = "";
-const drawingSettings = { tool: "pen", color: "#173f5f", width: 5 };
+const drawingSettings = { tool: "pen", color: "#173f5f", width: 5, smoothing: loadStudentSmoothing() };
 let activeMode = "pen";
+
+function loadStudentSmoothing() {
+  try { return localStorage.getItem("classpad-student-smoothing") !== "false"; }
+  catch { return true; }
+}
+
+function renderSmoothingButton() {
+  const enabled = drawingSettings.smoothing;
+  smoothingButton.classList.toggle("active", enabled);
+  smoothingButton.setAttribute("aria-pressed", String(enabled));
+  smoothingButton.setAttribute("aria-label", enabled ? "關閉手寫平滑" : "開啟手寫平滑");
+  smoothingButton.querySelector("span").textContent = `平滑：${enabled ? "開" : "關"}`;
+}
 
 watchConnection(document.querySelector("#connectionBadge"));
 document.querySelector("#studentBackgroundImage").addEventListener("error", () => toast("題目底圖載入失敗，請通知老師檢查 Google Drive 分享權限。", "error"));
@@ -158,6 +172,7 @@ function openPage(pageId, updatePresence = true) {
     onViewChange: (view) => { stickyNotes.setViewport(view); activeTextLayer.setViewport(view); setBackgroundViewport(document.querySelector("#studentBackgroundLayer"), view); document.querySelector("#studentZoomScale").textContent = `${Math.round(view.scale * 100)}%`; document.querySelector("#studentZoomOut").disabled = view.scale <= .25; document.querySelector("#studentZoomIn").disabled = view.scale >= 4; }
   });
   const activeEngine = engine, activeStickyNotes = stickyNotes;
+  engine.setSmoothing(drawingSettings.smoothing);
   engine.setTool(drawingSettings.tool);
   engine.setColor(drawingSettings.color);
   engine.setWidth(drawingSettings.width);
@@ -220,6 +235,13 @@ async function init() {
 }
 
 function bindToolbar() {
+  smoothingButton.onclick = () => {
+    drawingSettings.smoothing = !drawingSettings.smoothing;
+    engine?.setSmoothing(drawingSettings.smoothing);
+    try { localStorage.setItem("classpad-student-smoothing", String(drawingSettings.smoothing)); } catch {}
+    renderSmoothingButton();
+  };
+  renderSmoothingButton();
   toolbar.querySelectorAll("button[data-tool]").forEach((button) => button.onclick = () => {
     activeMode = button.dataset.tool;
     drawingSettings.tool = activeMode;
