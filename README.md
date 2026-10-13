@@ -1,4 +1,6 @@
-# ClassPad 即時同步手寫白板
+# ClassPad2 即時同步手寫白板
+
+線上使用：[ClassPad2](https://educatres.github.io/classPad2/)。原始碼：[educatres/classPad2](https://github.com/educatres/classPad2)。
 
 我一直很喜歡使用 Google Jamboard 進行教學，因為它能讓學生在課堂中即時書寫、分享想法並彼此互動。可惜 Jamboard 服務結束後，我始終找不到完全符合需求的替代工具。市面上雖然已有不少功能完整的訂閱平台，但我通常只會在每學期的特定幾週密集使用，若為了短期的教學需求而長期訂閱，不太符合我的使用情境。
 
@@ -59,7 +61,7 @@ pnpm build
 
    ```bash
    pnpm exec firebase login
-   pnpm exec firebase use classroompad
+   pnpm exec firebase use classpad2
    pnpm exec firebase deploy --only database
    ```
 
@@ -71,6 +73,8 @@ pnpm build
 5. 權限資料會在首次使用後依規則建立於 `classes`、`students`、`boards`、`activeStrokes`、`presence`、`userClasses`、`teacherKeys`、`teacherKeyClaims` 與 `boardLookup` 節點，不需手動建立空資料表。課程建立滿 3 小時後，會在老師下次使用首頁、管理頁或監看頁時自動清除。
 
 ## GitHub Pages
+
+Repository → Settings → Pages 的 Source 設為 **GitHub Actions**。GitHub Actions 建置使用 `/classPad2/` 路徑，本機開發使用 `/`。
 
 推送 `main` 後，`.github/workflows/deploy-pages.yml` 會測試、建置並部署 `dist`。Repository 的 Actions Secrets 需要：
 

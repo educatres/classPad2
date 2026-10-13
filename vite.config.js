@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? "/classpad/" : "/",
+  base: process.env.GITHUB_ACTIONS ? "/classPad2/" : "/",
   build: {
     outDir: "dist",
     sourcemap: true,
