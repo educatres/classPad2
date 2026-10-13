@@ -37,6 +37,14 @@ export class BoardEngine {
   async undo(){const action=this.undoStack.pop();if(!action)return;this.redoStack.push(action);const map=this.strokes[this.editableLayer];if(action.type==="add"){map.delete(action.stroke.id);await this.onRemove?.(action.stroke.id);}else{map.set(action.stroke.id,action.stroke);await this.onComplete?.(action.stroke);}this.renderAll();}
   async redo(){const action=this.redoStack.pop();if(!action)return;this.undoStack.push(action);const map=this.strokes[this.editableLayer];if(action.type==="add"){map.set(action.stroke.id,action.stroke);await this.onComplete?.(action.stroke);}else{map.delete(action.stroke.id);await this.onRemove?.(action.stroke.id);}this.renderAll();}
   notifyViewChange(){this.onViewChange?.({scale:this.scale,panX:this.panX,panY:this.panY});}
+  zoomBy(delta){
+    const nextScale=clamp(Math.round((this.scale+delta)*1e6)/1e6,.25,4);
+    if(nextScale===this.scale)return;
+    const {width,height}=this.stage.getBoundingClientRect(),ratio=nextScale/this.scale;
+    this.panX=width/2-(width/2-this.panX)*ratio;
+    this.panY=height/2-(height/2-this.panY)*ratio;
+    this.scale=nextScale;this.notifyViewChange();this.renderAll();
+  }
   resetZoom(){this.scale=1;this.panX=0;this.panY=0;this.notifyViewChange();this.renderAll();}
   context(canvas){const dpr=window.devicePixelRatio||1,ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,this.cssWidth,this.cssHeight);ctx.translate(this.panX,this.panY);ctx.scale(this.scale,this.scale);return ctx;}
   renderBackground(){const ctx=this.context(this.backgroundCanvas),w=this.cssWidth,h=this.cssHeight;ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.strokeStyle="#e7eff1";ctx.lineWidth=1;const s=40;for(let x=0;x<w;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}for(let y=0;y<h;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}}

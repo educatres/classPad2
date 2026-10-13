@@ -235,7 +235,7 @@ function openReviewPage(pageId) {
     onComplete: (stroke) => saveStroke(currentStudent.boardToken, "teacherStrokes", stroke, activePageId).catch((error) => toast(explainError(error), "error")),
     onRemove: (id) => removeStroke(currentStudent.boardToken, "teacherStrokes", id, activePageId).catch((error) => toast(explainError(error), "error")),
     onActive: (stroke) => { const now = Date.now(); if (stroke && (activePageId !== lastTeacherActivityPageId || now - lastTeacherActivityAt >= 750)) { lastTeacherActivityAt = now; lastTeacherActivityPageId = activePageId; markBoardActivity(currentStudent.boardToken, "teacherStrokes", activePageId).catch(() => {}); } },
-    onViewChange: (view) => { reviewStickyNotes?.setViewport(view); reviewTextLayer?.setViewport(view); setBackgroundViewport(document.querySelector("#reviewBackgroundLayer"), view); }
+    onViewChange: (view) => { reviewStickyNotes?.setViewport(view); reviewTextLayer?.setViewport(view); setBackgroundViewport(document.querySelector("#reviewBackgroundLayer"), view); document.querySelector("#reviewZoomScale").textContent = `${Math.round(view.scale * 100)}%`; document.querySelector("#reviewZoomOut").disabled = view.scale <= .25; document.querySelector("#reviewZoomIn").disabled = view.scale >= 4; }
   });
   reviewEngine = activeEngine; reviewEngine.setSmoothing(teacherSmoothing);
   reviewEngine.setTool(dialog.querySelector("button[data-tool].active")?.dataset.tool || "pen");
@@ -323,6 +323,8 @@ async function finishBackgroundMove(event, cancelled = false) {
 reviewStage.addEventListener("pointerup", (event) => finishBackgroundMove(event), true);
 reviewStage.addEventListener("pointercancel", (event) => finishBackgroundMove(event, true), true);
 document.querySelector("#reviewUndo").onclick = () => reviewEngine?.undo(); document.querySelector("#reviewRedo").onclick = () => reviewEngine?.redo(); document.querySelector("#reviewResetZoom").onclick = () => reviewEngine?.resetZoom();
+document.querySelector("#reviewZoomOut").onclick = () => reviewEngine?.zoomBy(-.1);
+document.querySelector("#reviewZoomIn").onclick = () => reviewEngine?.zoomBy(.1);
 smoothingButton.onclick = () => { teacherSmoothing = !teacherSmoothing; reviewEngine?.setSmoothing(teacherSmoothing); try { localStorage.setItem("classpad-teacher-smoothing", String(teacherSmoothing)); } catch {} renderSmoothingButton(); };
 renderSmoothingButton();
 document.querySelector("#reviewPrevPage").onclick = () => { const pages = classPages(), index = pages.findIndex((item) => item.id === currentReviewPageId); openReviewPage(pages[Math.max(0, index - 1)].id); };

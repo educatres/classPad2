@@ -155,7 +155,7 @@ function openPage(pageId, updatePresence = true) {
         ? publishActive(token, "student", user.uid, { ...stroke, points: stroke.points.slice(-80), updatedAt: Date.now(), pageId: activePageId })
         : clearActive(token, "student", user.uid), 100);
     },
-    onViewChange: (view) => { stickyNotes.setViewport(view); activeTextLayer.setViewport(view); setBackgroundViewport(document.querySelector("#studentBackgroundLayer"), view); }
+    onViewChange: (view) => { stickyNotes.setViewport(view); activeTextLayer.setViewport(view); setBackgroundViewport(document.querySelector("#studentBackgroundLayer"), view); document.querySelector("#studentZoomScale").textContent = `${Math.round(view.scale * 100)}%`; document.querySelector("#studentZoomOut").disabled = view.scale <= .25; document.querySelector("#studentZoomIn").disabled = view.scale >= 4; }
   });
   const activeEngine = engine, activeStickyNotes = stickyNotes;
   engine.setTool(drawingSettings.tool);
@@ -232,6 +232,8 @@ function bindToolbar() {
   document.querySelector("#undoBtn").onclick = () => engine?.undo();
   document.querySelector("#redoBtn").onclick = () => engine?.redo();
   document.querySelector("#resetZoomBtn").onclick = () => engine?.resetZoom();
+  document.querySelector("#studentZoomOut").onclick = () => engine?.zoomBy(-.1);
+  document.querySelector("#studentZoomIn").onclick = () => engine?.zoomBy(.1);
   document.querySelector("#studentPrevPage").onclick = () => openPage(pages[Math.max(0, pages.findIndex((page) => page.id === currentPageId) - 1)].id);
   document.querySelector("#studentNextPage").onclick = () => openPage(pages[Math.min(pages.length - 1, pages.findIndex((page) => page.id === currentPageId) + 1)].id);
 }

@@ -997,6 +997,18 @@ dialog form {
   border-top: 1px solid var(--border);
   overflow-x: auto;
 }
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.zoom-controls output {
+  min-width: 4ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .board-toolbar button {
   min-width: 64px;
   background: #eef3f5;
