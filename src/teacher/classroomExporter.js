@@ -60,6 +60,9 @@ export async function renderPagePng({ classroom, student, page, pageNumber, stud
   context.fillText(`${student.seatNumber || ""} ${student.displayName || ""}　第 ${pageNumber} 頁　${exportedAt.toLocaleString("zh-TW")}　${classroom.title || ""}`, 30, 48);
   context.save();
   context.translate(0, 80);
+  context.beginPath();
+  context.rect(0, 0, width, drawingHeight);
+  context.clip();
   await drawPageBackground(context, page?.backgroundImage, width, drawingHeight, loadImage);
   for (const stroke of studentStrokes) drawStrokeOnCanvas(context, stroke, width, drawingHeight);
   drawStudentText(context, studentText, width, drawingHeight);

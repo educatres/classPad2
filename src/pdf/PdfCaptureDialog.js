@@ -7,6 +7,7 @@ import { createCaptureDispatch, dispatchCapture } from "../firebase/materialRepo
 import { onValue, ref } from "firebase/database";
 import { database } from "../firebase/config.js";
 import { normalizeBoardPages } from "../whiteboard/pages.js";
+import { CapturePlacementEditor } from "./CapturePlacementEditor.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -14,14 +15,16 @@ export function openPdfCaptureDialog({ classId, uid, isActive, onSuccess }) {
   const dialog = document.createElement("dialog"); dialog.className = "pdf-dialog";
   dialog.innerHTML = `<div class="dialog-head"><h2>PDF 題目派送</h2><button data-close aria-label="關閉">×</button></div>
     <p class="muted">PDF 原檔只在本機開啟；派送的截圖會暫存於課堂資料庫。每課堂最多 20 張，關閉視窗會清除未派送的截圖。</p>
-    <div class="pdf-toolbar"><button data-open>開啟 PDF</button><input type="file" accept=".pdf,application/pdf" hidden>
+    <section data-source><div class="pdf-toolbar"><button data-open>開啟 PDF</button><input type="file" accept=".pdf,application/pdf" hidden>
     <button data-prev>上一頁</button><span data-page>尚未開啟 PDF</span><button data-next>下一頁</button>
     <button data-out>縮小</button><span data-zoom>100%</span><button data-in>放大</button></div>
     <div class="pdf-toolbar"><button data-browse aria-pressed="false">瀏覽</button><button data-select aria-pressed="true">框選</button><button data-all>選取整頁</button><button data-reset>重新框選</button></div>
-    <div class="pdf-scroll"><div class="pdf-sheet selecting"><canvas></canvas><div class="pdf-selection" hidden></div></div></div>
-    <div class="pdf-footer"><img data-preview alt="截圖預覽" hidden><div><p data-size>請開啟 PDF 並框選題目，或選取整頁。</p><p data-status role="status"></p><button data-cancel>取消選取</button><button data-dispatch class="primary" disabled>派送為新白板</button></div></div>`;
+    <div class="pdf-scroll"><div class="pdf-sheet selecting"><canvas></canvas><div class="pdf-selection" hidden></div></div></div></section>
+    <section data-layout class="pdf-layout" hidden></section>
+    <div class="pdf-footer"><div><p data-size>請開啟 PDF 並框選題目，或選取整頁。</p><p data-status role="status"></p><button data-cancel>取消選取</button><button data-dispatch class="primary" disabled>派送為新白板</button></div></div>`;
   document.body.append(dialog);
-  const $ = (selector) => dialog.querySelector(selector), canvas = $("canvas"), sheet = $(".pdf-sheet"), selectionBox = $(".pdf-selection"), preview = $("[data-preview]"), status = $("[data-status]");
+  const $ = (selector) => dialog.querySelector(selector), canvas = $("canvas"), sheet = $(".pdf-sheet"), selectionBox = $(".pdf-selection"), status = $("[data-status]");
+  const placementEditor = new CapturePlacementEditor($("[data-layout]"), () => { clearSelection(); mode(false); message("請重新框選題目範圍，或選取整頁。"); });
   let loadingTask, documentPdf, page, renderTask, cropTask, current = 1, zoom = 1, sequence = 0, cropSequence = 0, closed = false, busy = false, sending = false, online = false, browsing = false;
   let selection, drag, capture, previewUrl, operation;
   const message = (text) => { if (!closed) status.textContent = text; };
@@ -38,12 +41,13 @@ export function openPdfCaptureDialog({ classId, uid, isActive, onSuccess }) {
     $("[data-prev]").disabled = sending || busy || !documentPdf || current <= 1;
     $("[data-next]").disabled = sending || busy || !documentPdf || current >= documentPdf.numPages;
     for (const name of ["all", "reset", "out", "in"]) $(`[data-${name}]`).disabled = sending || busy || !page;
+    placementEditor.setEnabled(!sending && !busy && !operation && active);
     $("[data-dispatch]").textContent = sending ? "正在派送…" : "派送為新白板";
   }
   const validityTimer = setInterval(() => { if (!isActive()) message("此課堂已結束或到期，無法派送題目。"); controls(); }, 1000);
   function clearSelection() {
     cropSequence++; cropTask?.cancel(); cropTask = null; drag = null; selection = null; capture = null; operation = null;
-    selectionBox.hidden = true; preview.hidden = true; preview.removeAttribute("src");
+    selectionBox.hidden = true; placementEditor.clear(); $("[data-source]").hidden = false;
     if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = null;
     $("[data-size]").textContent = "請先框選題目範圍，或選取整頁。"; controls();
   }
@@ -65,9 +69,10 @@ export function openPdfCaptureDialog({ classId, uid, isActive, onSuccess }) {
       await cropTask.promise;
       const result = await compressCapture(output);
       if (closed || job !== cropSequence) return;
-      capture = result; operation = null; previewUrl = URL.createObjectURL(result.blob); preview.src = previewUrl; preview.hidden = false;
+      capture = result; operation = null; previewUrl = URL.createObjectURL(result.blob);
+      $("[data-source]").hidden = true; placementEditor.setCapture(result, previewUrl);
       $("[data-size]").textContent = `${result.width} × ${result.height} 像素・${(result.byteLength / 1024).toFixed(1)} KiB（上限 256 KiB）`;
-      message("截圖已暫存在此視窗，確認預覽後即可派送。");
+      message("截圖已暫存在此視窗，請調整白板上的大小與位置，確認後再派送。");
     } catch (error) { if (!closed && job === cropSequence && error.name !== "RenderingCancelledException") message(error.message || "無法產生截圖，請重新框選。"); }
     finally { output.width = output.height = 0; if (job === cropSequence && !closed) { busy = false; controls(); } }
   }
@@ -96,7 +101,7 @@ export function openPdfCaptureDialog({ classId, uid, isActive, onSuccess }) {
     await loadingTask?.destroy(); loadingTask = documentPdf = null;
     canvas.width = canvas.height = 0;
   }
-  $("input").onchange = async (event) => {
+  $("input[type=file]").onchange = async (event) => {
     const file = event.target.files[0]; event.target.value = ""; if (!file) return;
     if (file.size > PDF_LIMITS.fileBytes) { message("PDF 超過 30 MiB，請先縮小檔案。"); return; }
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") { message("此檔案不是可讀取的 PDF，請重新選擇。"); return; }
@@ -116,7 +121,7 @@ export function openPdfCaptureDialog({ classId, uid, isActive, onSuccess }) {
     finally { busy = false; controls(); }
   };
   function mode(value) { browsing = value; sheet.classList.toggle("selecting", !value); $("[data-browse]").setAttribute("aria-pressed", String(value)); $("[data-select]").setAttribute("aria-pressed", String(!value)); }
-  $("[data-open]").onclick = () => $("input").click();
+  $("[data-open]").onclick = () => $("input[type=file]").click();
   $("[data-prev]").onclick = () => { current--; renderPage(); }; $("[data-next]").onclick = () => { current++; renderPage(); };
   $("[data-out]").onclick = () => { zoom = Math.max(.5, zoom - .25); renderPage(); }; $("[data-in]").onclick = () => { zoom = Math.min(3, zoom + .25); renderPage(); };
   $("[data-browse]").onclick = () => mode(true); $("[data-select]").onclick = () => mode(false);
@@ -133,7 +138,7 @@ export function openPdfCaptureDialog({ classId, uid, isActive, onSuccess }) {
     if (sending || !capture || busy) return;
     if (!online) { message("目前離線，請恢復連線後再派送。"); return; }
     if (!isActive()) { message("此課堂已結束或到期，無法派送題目。"); return; }
-    operation ||= createCaptureDispatch(capture, uid); sending = true; controls(); message("正在派送…");
+    operation ||= createCaptureDispatch(capture, uid, placementEditor.value); sending = true; controls(); message("正在派送…");
     try {
       const result = await dispatchCapture(classId, operation, uid);
       const number = normalizeBoardPages(result.classroom.boardPages).findIndex((p) => p.id === result.pageId) + 1;

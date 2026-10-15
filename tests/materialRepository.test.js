@@ -32,12 +32,24 @@ describe("教材派送", () => {
     expect(mock.update).toHaveBeenCalledOnce();
     expect(classroom.boardPages[operation.pageId].backgroundImage.assetId).toBe(operation.pageId);
   });
+  it("派送前鎖定版面，課堂及每位學生頁面使用同一大小位置，不改動 JPEG", async () => {
+    const placement = { scale: .5375, x: .32, y: .41 }, operation = createCaptureDispatch(capture, uid, placement);
+    placement.scale = 1; placement.x = .5;
+    classroom.studentOrder = { s1: 0 };
+    data["students/s1"] = { classId, enabled: true, boardToken: "student-token" };
+    await dispatchCapture(classId, operation, uid);
+    const pagePath = `classes/${classId}/boardPages/${operation.pageId}`, studentPath = `boardPages/student-token/${operation.pageId}`;
+    expect(data[pagePath].backgroundImage).toMatchObject({ scale: .5375, x: .32, y: .41 });
+    expect(data[studentPath]).toEqual(data[pagePath]);
+    expect(data[`classMaterials/${classId}/${operation.pageId}`].base64).toBe(capture.base64);
+  });
   it("寫入回應遺失時讀回同 ID，避免重寫 immutable 資產", async () => {
     const persist = mock.update.getMockImplementation();
     mock.update.mockImplementationOnce(async (...args) => { await persist(...args); throw new Error("response lost"); });
-    const operation = createCaptureDispatch(capture, uid);
+    const operation = createCaptureDispatch(capture, uid, { scale: .63, x: .35, y: .42 });
     await expect(dispatchCapture(classId, operation, uid)).resolves.toMatchObject({ pageId: operation.pageId });
     expect(mock.update).toHaveBeenCalledOnce();
+    expect(classroom.boardPages[operation.pageId].backgroundImage).toMatchObject({ scale: .63, x: .35, y: .42 });
   });
   it("離線、課堂關閉與滿 20 張時拒絕派送", async () => {
     const operation = createCaptureDispatch(capture, uid); data[".info/connected"] = false;

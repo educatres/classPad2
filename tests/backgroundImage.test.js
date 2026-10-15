@@ -43,8 +43,8 @@ describe("Google Drive 白板底圖", () => {
       getAttribute: (key) => attributes.get(key) || null,
       set src(value) { attributes.set("src", value); }
     };
-    showBackgroundImage(element, { sourceUrl: `https://drive.google.com/file/d/${fileId}/view`, imageUrl: `https://drive.google.com/thumbnail?id=${fileId}&sz=w2000`, scale: .45, x: .25, y: .7, updatedAt: 2, updatedBy: "teacher" });
-    expect(Object.fromEntries(properties)).toEqual({ "--background-size": "45%", "--background-x": "25%", "--background-y": "70%" });
+    showBackgroundImage(element, { sourceUrl: `https://drive.google.com/file/d/${fileId}/view`, imageUrl: `https://drive.google.com/thumbnail?id=${fileId}&sz=w2000`, scale: .5375, x: .25, y: .7, updatedAt: 2, updatedBy: "teacher" });
+    expect(Object.fromEntries(properties)).toEqual({ "--background-size": "53.75%", "--background-x": "25%", "--background-y": "70%" });
     expect(element.hidden).toBe(false);
   });
 

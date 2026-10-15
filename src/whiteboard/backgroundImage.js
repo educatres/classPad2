@@ -57,14 +57,19 @@ export function googleDriveCanvasImageUrl(value) {
 
 export function backgroundImageDrawRect(value, imageWidth, imageHeight, width = 1600, height = 1200) {
   const background = normalizeBackgroundImage(value);
+  return background ? backgroundImagePlacementRect(background, imageWidth, imageHeight, width, height) : null;
+}
+
+export function backgroundImagePlacementRect(value, imageWidth, imageHeight, width = 1600, height = 1200) {
   const naturalWidth = Number(imageWidth), naturalHeight = Number(imageHeight);
-  if (!background || !(naturalWidth > 0) || !(naturalHeight > 0)) return null;
-  const boxWidth = width * background.scale, boxHeight = height * background.scale;
+  if (!(naturalWidth > 0) || !(naturalHeight > 0)) return null;
+  const scale = normalizeBackgroundScale(value?.scale);
+  const boxWidth = width * scale, boxHeight = height * scale;
   const imageScale = Math.min(boxWidth / naturalWidth, boxHeight / naturalHeight);
   const drawWidth = naturalWidth * imageScale, drawHeight = naturalHeight * imageScale;
   return {
-    x: background.x * width - drawWidth / 2,
-    y: background.y * height - drawHeight / 2,
+    x: normalizeBackgroundPosition(value?.x) * width - drawWidth / 2,
+    y: normalizeBackgroundPosition(value?.y) * height - drawHeight / 2,
     width: drawWidth,
     height: drawHeight
   };
@@ -110,7 +115,7 @@ export function showBackgroundImage(element, value) {
     if (element.getAttribute("src") !== background.imageUrl) element.src = background.imageUrl;
     element.hidden = false;
   }
-  element.style.setProperty("--background-size", `${Math.round(background.scale * 100)}%`);
+  element.style.setProperty("--background-size", `${background.scale * 100}%`);
   element.style.setProperty("--background-x", `${background.x * 100}%`);
   element.style.setProperty("--background-y", `${background.y * 100}%`);
 }

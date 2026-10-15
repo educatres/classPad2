@@ -4,6 +4,7 @@ import { randomId } from "../utils/random.js";
 import { serverNow, isClassroomExpired } from "../utils/classroomExpiration.js";
 import { CAPTURE_ID, PDF_LIMITS, validateCapture } from "../pdf/limits.js";
 import { reconcileClassBoardPages } from "./pageRepository.js";
+import { normalizeCapturePlacement } from "../pdf/placement.js";
 
 let studentSession;
 
@@ -29,9 +30,9 @@ export function setMaterialSession(classId, uid, studentId, boardToken) {
   return set(ref(database, `classMaterialSessions/${classId}/${uid}`), { studentId, boardToken });
 }
 
-export function createCaptureDispatch(capture, uid) {
+export function createCaptureDispatch(capture, uid, placement) {
   validateCapture(capture);
-  return { pageId: `page_${randomId(22)}`, asset: { version: 1, mimeType: "image/jpeg", base64: capture.base64, width: capture.width, height: capture.height, byteLength: capture.byteLength, createdAt: serverNow(), createdBy: uid } };
+  return { pageId: `page_${randomId(22)}`, placement: normalizeCapturePlacement(placement), asset: { version: 1, mimeType: "image/jpeg", base64: capture.base64, width: capture.width, height: capture.height, byteLength: capture.byteLength, createdAt: serverNow(), createdBy: uid } };
 }
 
 async function readClass(classId, uid) {
@@ -46,7 +47,7 @@ async function readClass(classId, uid) {
 export function buildCaptureDispatch(classId, classroom, students, operation) {
   const { pageId, asset } = operation;
   const order = Math.max(0, ...Object.values(classroom.boardPages || {}).map((page) => Number(page.order) || 0)) + 1;
-  const page = { id: pageId, order, createdAt: asset.createdAt, createdBy: asset.createdBy, backgroundImage: { type: "rtdb-capture", classId, assetId: pageId, scale: 1, x: .5, y: .5, updatedAt: asset.createdAt, updatedBy: asset.createdBy } };
+  const page = { id: pageId, order, createdAt: asset.createdAt, createdBy: asset.createdBy, backgroundImage: { type: "rtdb-capture", classId, assetId: pageId, ...normalizeCapturePlacement(operation.placement), updatedAt: asset.createdAt, updatedBy: asset.createdBy } };
   const changes = { [`classMaterials/${classId}/${pageId}`]: asset, [`classes/${classId}/boardPages/${pageId}`]: page, [`classes/${classId}/updatedAt`]: serverNow() };
   for (const student of students) changes[`boardPages/${student.boardToken}/${pageId}`] = page;
   return changes;
