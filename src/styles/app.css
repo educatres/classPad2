@@ -653,7 +653,10 @@ dialog form {
   opacity: 1;
 }
 .board-page {
+  display: flex;
+  flex-direction: column;
   height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   overflow: hidden;
   overscroll-behavior: none;
 }
@@ -726,13 +729,16 @@ dialog form {
 }
 .board-header {
   position: relative;
+  flex: 0 0 auto;
   height: 62px;
 }
 .board-shell {
-  height: calc(100dvh - 62px - 78px);
+  flex: 1;
+  min-height: 0;
   padding: 0.65rem;
   display: grid;
   place-items: center;
+  container-type: size;
 }
 .board-stage {
   position: relative;
@@ -755,6 +761,9 @@ dialog form {
   inset: 0;
   width: 100%;
   height: 100%;
+}
+.board-page .board-stage {
+  width: min(100%, calc(100cqh * 4 / 3));
 }
 .background-image-layer {
   position: absolute;
@@ -997,6 +1006,17 @@ dialog form {
   background: rgba(255, 255, 255, 0.96);
   border-top: 1px solid var(--border);
   overflow-x: auto;
+}
+.board-page .board-toolbar {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  flex: 0 0 auto;
+  padding: 0.55rem 1rem;
+  justify-content: flex-start;
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
 }
 .zoom-controls {
   display: flex;
@@ -1507,4 +1527,5 @@ dialog form {
 .material-status { position: absolute; z-index: 5; top: 8px; left: 8px; max-width: calc(100% - 16px); pointer-events: auto; font-size: 14px; padding: 6px 10px; }
 .new-material-notice { position: fixed; z-index: 30; top: 70px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; width: max-content; max-width: 94vw; padding: 10px 14px; background: #e7f5ff; border: 1px solid #8cbad5; border-radius: 12px; }
 .new-material-notice[hidden] { display: none; }
+.board-page .new-material-notice { position: relative; z-index: auto; top: auto; left: auto; transform: none; flex: 0 0 auto; width: auto; max-width: 100%; margin: 0.5rem 0.65rem 0; }
 @media (max-width: 600px) { .pdf-dialog { padding: 12px; } .pdf-footer { flex-wrap: wrap; } .pdf-scroll { height: 36dvh; } .pdf-layout-content { grid-template-columns: minmax(0, 1fr); } }
