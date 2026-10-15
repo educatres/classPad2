@@ -33,13 +33,58 @@
         },
         "boardPages": {
           "$pageId": {
-            ".validate": "newData.hasChildren(['id','order','createdAt','createdBy']) && $pageId.matches(/^(main|page_[A-Za-z0-9_-]{6,48})$/) && newData.child('id').val() === $pageId && newData.child('order').isNumber() && newData.child('order').val() >= 0 && newData.child('createdAt').isNumber() && newData.child('createdBy').isString() && newData.child('createdBy').val().length > 0 && newData.child('createdBy').val().length <= 128",
-            "id": { ".validate": "newData.val() === $pageId" }, "order": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "createdAt": { ".validate": "newData.isNumber()" }, "createdBy": { ".validate": "newData.isString()" },
-            "backgroundImage": {
-              ".validate": "!newData.exists() || (newData.hasChildren(['sourceUrl','imageUrl','scale','updatedAt','updatedBy']) && newData.child('sourceUrl').isString() && newData.child('sourceUrl').val().length <= 1000 && newData.child('sourceUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]/) && newData.child('imageUrl').isString() && newData.child('imageUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]thumbnail[?]id=[A-Za-z0-9_-]+&sz=w2000$/) && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128)",
-              "sourceUrl": { ".validate": "newData.isString()" }, "imageUrl": { ".validate": "newData.isString()" }, "scale": { ".validate": "newData.isNumber()" }, "x": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1" }, "y": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1" }, "updatedAt": { ".validate": "newData.isNumber()" }, "updatedBy": { ".validate": "newData.isString()" }, "$other": { ".validate": false }
+            ".validate": "newData.hasChildren(['id','order','createdAt','createdBy']) && $pageId.matches(/^(main|page_[A-Za-z0-9_-]{6,48})$/) && newData.child('id').val() === $pageId && newData.child('order').isNumber() && newData.child('order').val() >= 0 && newData.child('createdAt').isNumber() && newData.child('createdBy').isString() && newData.child('createdBy').val().length > 0 && newData.child('createdBy').val().length <= 128 && (newData.child('backgroundImage').child('type').val() !== 'rtdb-capture' || !data.exists() || data.child('backgroundImage').child('type').val() === 'rtdb-capture') && (data.child('backgroundImage').child('type').val() !== 'rtdb-capture' || newData.child('backgroundImage').child('type').val() === 'rtdb-capture')",
+            "id": {
+              ".validate": "newData.val() === $pageId"
             },
-            "$other": { ".validate": false }
+            "order": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            "createdAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "createdBy": {
+              ".validate": "newData.isString()"
+            },
+            "backgroundImage": {
+              ".validate": "(!newData.child('type').exists() && (newData.hasChildren(['sourceUrl','imageUrl','scale','updatedAt','updatedBy']) && newData.child('sourceUrl').isString() && newData.child('sourceUrl').val().length <= 1000 && newData.child('sourceUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]/) && newData.child('imageUrl').isString() && newData.child('imageUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]thumbnail[?]id=[A-Za-z0-9_-]+&sz=w2000$/) && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128)) || (newData.hasChildren(['type','classId','assetId','scale','x','y','updatedAt','updatedBy']) && newData.child('type').val() === 'rtdb-capture' && $pageId !== 'main' && newData.child('classId').val() === $classId && newData.child('assetId').val() === $pageId && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128 && !newData.child('sourceUrl').exists() && !newData.child('imageUrl').exists())",
+              "sourceUrl": {
+                ".validate": "newData.isString()"
+              },
+              "imageUrl": {
+                ".validate": "newData.isString()"
+              },
+              "scale": {
+                ".validate": "newData.isNumber()"
+              },
+              "x": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+              },
+              "y": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+              },
+              "updatedAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "updatedBy": {
+                ".validate": "newData.isString()"
+              },
+              "$other": {
+                ".validate": false
+              },
+              "type": {
+                ".validate": "newData.isString()"
+              },
+              "classId": {
+                ".validate": "newData.isString()"
+              },
+              "assetId": {
+                ".validate": "newData.isString()"
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
         "$other": { ".validate": false }
@@ -139,17 +184,62 @@
     },
     "boardPages": {
       "$boardToken": {
-        ".read": "auth != null && (root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('studentUid').val() === auth.uid || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true || (root.child('displaySessions').child(auth.uid).child('boardToken').val() === $boardToken && root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('active').val() === true && root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('boardToken').val() === $boardToken))",
-        ".write": "auth != null && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true && (!newData.exists() || !root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').exists() || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').val() > now)",
+        ".read": "auth != null && (root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true || (((root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('studentUid').val() === auth.uid || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true || (root.child('displaySessions').child(auth.uid).child('boardToken').val() === $boardToken && root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('active').val() === true && root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('boardToken').val() === $boardToken))) && (root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('enabled').val() === true && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('boardToken').val() === $boardToken && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('classId').val() === root.child('boardLookup').child($boardToken).child('classId').val())))",
+        ".write": "(auth != null && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true && (!newData.exists() || !root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').exists() || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').val() > now)) && (!newData.exists() || (newData.parent().parent().child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('boardToken').val() === $boardToken))",
         ".validate": "!newData.exists() || newData.hasChildren(['main'])",
         "$pageId": {
-          ".validate": "newData.hasChildren(['id','order','createdAt','createdBy']) && $pageId.matches(/^(main|page_[A-Za-z0-9_-]{6,48})$/) && newData.child('id').val() === $pageId && newData.child('order').isNumber() && newData.child('order').val() >= 0 && newData.child('createdAt').isNumber() && newData.child('createdBy').isString() && newData.child('createdBy').val().length > 0 && newData.child('createdBy').val().length <= 128",
-          "id": { ".validate": "newData.val() === $pageId" }, "order": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "createdAt": { ".validate": "newData.isNumber()" }, "createdBy": { ".validate": "newData.isString()" },
-          "backgroundImage": {
-            ".validate": "!newData.exists() || (newData.hasChildren(['sourceUrl','imageUrl','scale','updatedAt','updatedBy']) && newData.child('sourceUrl').isString() && newData.child('sourceUrl').val().length <= 1000 && newData.child('sourceUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]/) && newData.child('imageUrl').isString() && newData.child('imageUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]thumbnail[?]id=[A-Za-z0-9_-]+&sz=w2000$/) && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128)",
-            "sourceUrl": { ".validate": "newData.isString()" }, "imageUrl": { ".validate": "newData.isString()" }, "scale": { ".validate": "newData.isNumber()" }, "x": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1" }, "y": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1" }, "updatedAt": { ".validate": "newData.isNumber()" }, "updatedBy": { ".validate": "newData.isString()" }, "$other": { ".validate": false }
+          ".validate": "newData.hasChildren(['id','order','createdAt','createdBy']) && $pageId.matches(/^(main|page_[A-Za-z0-9_-]{6,48})$/) && newData.child('id').val() === $pageId && newData.child('order').isNumber() && newData.child('order').val() >= 0 && newData.child('createdAt').isNumber() && newData.child('createdBy').isString() && newData.child('createdBy').val().length > 0 && newData.child('createdBy').val().length <= 128 && (newData.child('backgroundImage').child('type').val() !== 'rtdb-capture' || !data.exists() || data.child('backgroundImage').child('type').val() === 'rtdb-capture') && (data.child('backgroundImage').child('type').val() !== 'rtdb-capture' || newData.child('backgroundImage').child('type').val() === 'rtdb-capture')",
+          "id": {
+            ".validate": "newData.val() === $pageId"
           },
-          "$other": { ".validate": false }
+          "order": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "createdBy": {
+            ".validate": "newData.isString()"
+          },
+          "backgroundImage": {
+            ".validate": "(!newData.child('type').exists() && (newData.hasChildren(['sourceUrl','imageUrl','scale','updatedAt','updatedBy']) && newData.child('sourceUrl').isString() && newData.child('sourceUrl').val().length <= 1000 && newData.child('sourceUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]/) && newData.child('imageUrl').isString() && newData.child('imageUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]thumbnail[?]id=[A-Za-z0-9_-]+&sz=w2000$/) && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128)) || (newData.hasChildren(['type','classId','assetId','scale','x','y','updatedAt','updatedBy']) && newData.child('type').val() === 'rtdb-capture' && $pageId !== 'main' && newData.child('classId').val() === root.child('boardLookup').child($boardToken).child('classId').val() && newData.child('assetId').val() === $pageId && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128 && !newData.child('sourceUrl').exists() && !newData.child('imageUrl').exists())",
+            "sourceUrl": {
+              ".validate": "newData.isString()"
+            },
+            "imageUrl": {
+              ".validate": "newData.isString()"
+            },
+            "scale": {
+              ".validate": "newData.isNumber()"
+            },
+            "x": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+            },
+            "y": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "updatedBy": {
+              ".validate": "newData.isString()"
+            },
+            "$other": {
+              ".validate": false
+            },
+            "type": {
+              ".validate": "newData.isString()"
+            },
+            "classId": {
+              ".validate": "newData.isString()"
+            },
+            "assetId": {
+              ".validate": "newData.isString()"
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       }
     },
@@ -181,7 +271,7 @@
         },
         "studentText": {
           ".read": "auth != null && (root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('studentUid').val() === auth.uid || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true || (root.child('displaySessions').child(auth.uid).child('boardToken').val() === $boardToken && root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('active').val() === true && root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('pageId').val() === 'main'))",
-          ".write": "auth != null && (!root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').exists() || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').val() > now) && (root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true || (root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('studentUid').val() === auth.uid && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('enabled').val() === true && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('locked').val() === false && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('status').val() === 'active' && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('allowStudentWriting').val() === true))",
+          ".write": "auth != null && (!root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').exists() || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').val() > now) && (root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true && !newData.exists() || (root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('studentUid').val() === auth.uid && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('enabled').val() === true && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('locked').val() === false && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('status').val() === 'active' && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('allowStudentWriting').val() === true))",
           ".validate": "!newData.exists() || (newData.hasChildren(['text','scrollTop','layoutVersion','updatedAt','authorUid']) && newData.child('text').isString() && newData.child('text').val().length <= 5000 && newData.child('scrollTop').isNumber() && newData.child('scrollTop').val() >= 0 && newData.child('scrollTop').val() <= 100000 && newData.child('layoutVersion').val() === 1 && newData.child('updatedAt').isNumber() && newData.child('authorUid').val() === auth.uid)",
           "text": { ".validate": "newData.isString() && newData.val().length <= 5000" }, "scrollTop": { ".validate": "newData.isNumber()" }, "layoutVersion": { ".validate": "newData.val() === 1" }, "updatedAt": { ".validate": "newData.isNumber()" }, "authorUid": { ".validate": "newData.val() === auth.uid" }, "$other": { ".validate": false }
         },
@@ -212,7 +302,7 @@
               }
             },
             "studentText": {
-              ".write": "auth != null && (!root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').exists() || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').val() > now) && (root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true || (root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('studentUid').val() === auth.uid && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('enabled').val() === true && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('locked').val() === false && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('status').val() === 'active' && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('allowStudentWriting').val() === true))",
+              ".write": "auth != null && (!root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').exists() || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').val() > now) && (root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true && !newData.exists() || (root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('studentUid').val() === auth.uid && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('enabled').val() === true && root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('locked').val() === false && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('status').val() === 'active' && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('allowStudentWriting').val() === true))",
               ".validate": "!newData.exists() || (newData.hasChildren(['text','scrollTop','layoutVersion','updatedAt','authorUid']) && newData.child('text').isString() && newData.child('text').val().length <= 5000 && newData.child('scrollTop').isNumber() && newData.child('scrollTop').val() >= 0 && newData.child('scrollTop').val() <= 100000 && newData.child('layoutVersion').val() === 1 && newData.child('updatedAt').isNumber() && newData.child('authorUid').val() === auth.uid)",
               "text": { ".validate": "newData.isString() && newData.val().length <= 5000" }, "scrollTop": { ".validate": "newData.isNumber()" }, "layoutVersion": { ".validate": "newData.val() === 1" }, "updatedAt": { ".validate": "newData.isNumber()" }, "authorUid": { ".validate": "newData.val() === auth.uid" }, "$other": { ".validate": false }
             },
@@ -273,6 +363,62 @@
           "$uid": {
             ".read": "auth != null && (root.child('students').child(root.child('boardLookup').child($boardToken).child('studentId').val()).child('studentUid').val() === auth.uid || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true)",
             ".write": "auth != null && auth.uid === $uid && root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('admins').child(auth.uid).val() === true && (!root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').exists() || root.child('classes').child(root.child('boardLookup').child($boardToken).child('classId').val()).child('expiresAt').val() > now)"
+          }
+        }
+      }
+    },
+    "classMaterials": {
+      "$classId": {
+        ".write": "auth != null && !newData.exists() && root.child('classes').child($classId).child('admins').child(auth.uid).val() === true",
+        "$assetId": {
+          ".read": "auth != null && (root.child('classes').child($classId).child('admins').child(auth.uid).val() === true || ((root.child('classes').child($classId).exists() && root.child('classes').child($classId).child('createdAt').val() + 10800000 > now && (!root.child('classes').child($classId).child('expiresAt').exists() || root.child('classes').child($classId).child('expiresAt').val() > now)) && ((root.child('classMaterialSessions').child($classId).child(auth.uid).hasChildren(['studentId','boardToken']) && root.child('students').child(root.child('classMaterialSessions').child($classId).child(auth.uid).child('studentId').val()).child('classId').val() === $classId && root.child('students').child(root.child('classMaterialSessions').child($classId).child(auth.uid).child('studentId').val()).child('studentUid').val() === auth.uid && root.child('students').child(root.child('classMaterialSessions').child($classId).child(auth.uid).child('studentId').val()).child('enabled').val() === true && root.child('students').child(root.child('classMaterialSessions').child($classId).child(auth.uid).child('studentId').val()).child('boardToken').val() === root.child('classMaterialSessions').child($classId).child(auth.uid).child('boardToken').val() && root.child('boardLookup').child(root.child('classMaterialSessions').child($classId).child(auth.uid).child('boardToken').val()).child('classId').val() === $classId && root.child('boardLookup').child(root.child('classMaterialSessions').child($classId).child(auth.uid).child('boardToken').val()).child('studentId').val() === root.child('classMaterialSessions').child($classId).child(auth.uid).child('studentId').val() && (root.child('boardPages').child(root.child('classMaterialSessions').child($classId).child(auth.uid).child('boardToken').val()).child($assetId).child('backgroundImage').child('type').val() === 'rtdb-capture' && root.child('boardPages').child(root.child('classMaterialSessions').child($classId).child(auth.uid).child('boardToken').val()).child($assetId).child('backgroundImage').child('classId').val() === $classId && root.child('boardPages').child(root.child('classMaterialSessions').child($classId).child(auth.uid).child('boardToken').val()).child($assetId).child('backgroundImage').child('assetId').val() === $assetId)) || (root.child('displaySessions').child(auth.uid).exists() && root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('active').val() === true && root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('classId').val() === $classId && root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('pageId').val() === $assetId && root.child('displaySessions').child(auth.uid).child('boardToken').val() === root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('boardToken').val() && root.child('students').child(root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('studentId').val()).child('enabled').val() === true && root.child('students').child(root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('studentId').val()).child('classId').val() === $classId && root.child('students').child(root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('studentId').val()).child('boardToken').val() === root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('boardToken').val() && root.child('boardLookup').child(root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('boardToken').val()).child('classId').val() === $classId && root.child('boardLookup').child(root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('boardToken').val()).child('studentId').val() === root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('studentId').val() && (root.child('boardPages').child(root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('boardToken').val()).child($assetId).child('backgroundImage').child('type').val() === 'rtdb-capture' && root.child('boardPages').child(root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('boardToken').val()).child($assetId).child('backgroundImage').child('classId').val() === $classId && root.child('boardPages').child(root.child('displays').child(root.child('displaySessions').child(auth.uid).child('displayToken').val()).child('boardToken').val()).child($assetId).child('backgroundImage').child('assetId').val() === $assetId)))))",
+          ".write": "auth != null && root.child('classes').child($classId).child('admins').child(auth.uid).val() === true && (!newData.exists() || (!data.exists() && ((root.child('classes').child($classId).exists() && root.child('classes').child($classId).child('createdAt').val() + 10800000 > now && (!root.child('classes').child($classId).child('expiresAt').exists() || root.child('classes').child($classId).child('expiresAt').val() > now)) && root.child('classes').child($classId).child('status').val() === 'active')))",
+          ".validate": "$assetId.matches(/^page_[A-Za-z0-9_-]{6,48}$/) && newData.hasChildren(['version','mimeType','base64','width','height','byteLength','createdAt','createdBy']) && !data.exists()",
+          "version": {
+            ".validate": "newData.val() === 1"
+          },
+          "mimeType": {
+            ".validate": "newData.val() === 'image/jpeg'"
+          },
+          "base64": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 349528 && newData.val().length % 4 === 0 && newData.val().matches(/^[A-Za-z0-9+\\/]+={0,2}$/)"
+          },
+          "width": {
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() > 0 && newData.val() <= 1600"
+          },
+          "height": {
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() > 0 && newData.val() <= 1600"
+          },
+          "byteLength": {
+            ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() > 0 && newData.val() <= 262144"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= now + 60000"
+          },
+          "createdBy": {
+            ".validate": "newData.isString() && newData.val() === auth.uid && newData.val().length <= 128"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "classMaterialSessions": {
+      "$classId": {
+        ".write": "auth != null && !newData.exists() && root.child('classes').child($classId).child('admins').child(auth.uid).val() === true",
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && (!newData.exists() || ((root.child('classes').child($classId).exists() && root.child('classes').child($classId).child('createdAt').val() + 10800000 > now && (!root.child('classes').child($classId).child('expiresAt').exists() || root.child('classes').child($classId).child('expiresAt').val() > now)) && (newData.hasChildren(['studentId','boardToken']) && root.child('students').child(newData.child('studentId').val()).child('classId').val() === $classId && root.child('students').child(newData.child('studentId').val()).child('studentUid').val() === auth.uid && root.child('students').child(newData.child('studentId').val()).child('enabled').val() === true && root.child('students').child(newData.child('studentId').val()).child('boardToken').val() === newData.child('boardToken').val() && root.child('boardLookup').child(newData.child('boardToken').val()).child('classId').val() === $classId && root.child('boardLookup').child(newData.child('boardToken').val()).child('studentId').val() === newData.child('studentId').val())))",
+          ".validate": "newData.hasChildren(['studentId','boardToken'])",
+          "studentId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 64"
+          },
+          "boardToken": {
+            ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{20,64}$/)"
+          },
+          "$other": {
+            ".validate": false
           }
         }
       }

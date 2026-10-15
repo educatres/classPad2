@@ -8,10 +8,11 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
-    "test:rules": "firebase emulators:exec --only auth,database 'vitest run --config vitest.rules.config.js'"
+    "test:rules": "firebase emulators:exec --only auth,database \"vitest run --config vitest.rules.config.js\""
   },
   "dependencies": {
     "firebase": "^12.1.0",
+    "pdfjs-dist": "5.4.624",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

@@ -1,7 +1,8 @@
 import { get, onValue, ref, runTransaction, update } from "firebase/database";
 import { database } from "./config.js";
 import { boardToken, randomId } from "../utils/random.js";
-import { boardPagesMap } from "../whiteboard/pages.js";
+import { canonicalBoardPagesMap as boardPagesMap } from "../whiteboard/pages.js";
+import { reconcileClassBoardPages } from "./pageRepository.js";
 
 export const MAX_STUDENTS = 80;
 
@@ -23,13 +24,14 @@ export async function addStudents(classId, classroom, input) {
   await update(ref(database), lookupChanges);
   try { await update(ref(database), changes); }
   catch (error) { await update(ref(database), lookupCleanup).catch(() => {}); throw error; }
+  await reconcileClassBoardPages(classId);
 }
 export async function getStudents(classroom) {
   const order = classroom?.studentOrder || {};
   const rows = await Promise.all(Object.keys(order).map(async (id) => ({ id, ...(await get(ref(database, `students/${id}`))).val() })));
   return rows.filter((row) => row.classId).sort((a,b) => order[a.id]-order[b.id]);
 }
-export function watchStudent(studentId, callback) { return onValue(ref(database, `students/${studentId}`), (snap) => callback(snap.val() ? { id: studentId, ...snap.val() } : null)); }
+export function watchStudent(studentId, callback, onError) { return onValue(ref(database, `students/${studentId}`), (snap) => callback(snap.val() ? { id: studentId, ...snap.val() } : null), onError); }
 export async function resolveBoard(token) {
   const lookup = (await get(ref(database, `boardLookup/${token}`))).val();
   if (!lookup) return null;
@@ -65,6 +67,7 @@ export async function regenerateBoard(classId, student) {
   try {
     await update(ref(database), { [`students/${student.id}/boardToken`]: token, [`students/${student.id}/studentUid`]: null, [`students/${student.id}/updatedAt`]: now, [`boardLookup/${student.boardToken}`]: null, [`boards/${student.boardToken}`]: null, [`boardPages/${student.boardToken}`]: null, [`activeStrokes/${student.boardToken}`]: null, [`boards/${token}/meta`]: { classId, studentId: student.id, revision: 0, updatedAt: now }, [`boardPages/${token}`]: pages });
   } catch (error) { await update(ref(database), { [`boardLookup/${token}`]: null }).catch(() => {}); throw error; }
+  await reconcileClassBoardPages(classId);
   return token;
 }
 export async function deleteStudent(classId, classroom, student) {

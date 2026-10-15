@@ -88,7 +88,7 @@ describe("課程建立與到期清理", () => {
 
     await expect(deleteClassroom("class-1", "teacher", classroom, students)).resolves.toBeUndefined();
     const changes = databaseMocks.update.mock.calls[0][1];
-    expect(changes).toMatchObject({ "classes/class-1": null, "publicClasses/class-1": null, "students/student": null, "userClasses/teacher/class-1": null });
+    expect(changes).toMatchObject({ "classes/class-1": null, "publicClasses/class-1": null, "students/student": null, "userClasses/teacher/class-1": null, "classMaterials/class-1": null, "classMaterialSessions/class-1": null });
     expect(changes).not.toHaveProperty("teacherInvites/stale-invite");
     expect(changes).not.toHaveProperty("displays/stale-display");
     expect(changes).not.toHaveProperty("boardLookup/stale-board");

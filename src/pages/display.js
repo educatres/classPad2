@@ -7,7 +7,8 @@ import { watchBoardPages } from "../firebase/pageRepository.js";
 import { BoardEngine } from "../canvas/BoardEngine.js";
 import { StickyNotesLayer } from "../notes/StickyNotesLayer.js";
 import { StudentTextLayer } from "../text/StudentTextLayer.js";
-import { setBackgroundViewport, showBackgroundImage } from "../whiteboard/backgroundImage.js";
+import { clearBackgroundImage, setBackgroundViewport, showBackgroundImage } from "../whiteboard/backgroundImage.js";
+import { materialCache } from "../whiteboard/materialCache.js";
 import { normalizeBoardPages } from "../whiteboard/pages.js";
 import { param } from "../utils/url.js";
 import { isClassroomExpired, watchClassroomExpiry } from "../utils/classroomExpiration.js";
@@ -15,6 +16,7 @@ import { explainError, toast } from "../utils/ui.js";
 
 const token = param("display"), black = document.querySelector("#displayBlack"), stage = document.querySelector("#displayStage"), message = document.querySelector("#displayMessage"), clock = document.querySelector("#displayClock");
 let user, displayOff, expirationOff, expirationTimerOff, expirationClassId, engine, stickyNotes, textLayer, clockTimer, projectionOffs = [], signature = "", expired = false;
+let projectionSequence = 0;
 const stopServerTime = watchServerTimeOffset();
 
 function updateClock() {
@@ -33,6 +35,9 @@ function showBlack(text = "") {
 }
 
 function stopProjection(clearSession = true) {
+  projectionSequence++;
+  clearBackgroundImage(document.querySelector("#displayBackgroundImage"));
+  materialCache.clear(expirationClassId);
   projectionOffs.forEach((off) => off?.());
   projectionOffs = [];
   stickyNotes?.destroy(); stickyNotes = null;
@@ -46,7 +51,9 @@ async function showProjection(state) {
   if (signature === nextSignature && engine) { document.querySelector("#displayLabel").textContent = state.label || ""; return; }
   signature = nextSignature;
   stopProjection(false);
+  const job = projectionSequence;
   await setDisplaySession(user.uid, token, state.boardToken);
+  if (job !== projectionSequence || expired) return;
   black.hidden = true; stage.hidden = false;
   document.querySelector("#displayLabel").textContent = state.label || "";
   stickyNotes = new StickyNotesLayer({ container: document.querySelector("#displayStickyLayer") });
@@ -69,7 +76,7 @@ async function showProjection(state) {
     watchBoardPages(board, (value) => {
       const page = normalizeBoardPages(value).find((item) => item.id === pageId);
       showBackgroundImage(document.querySelector("#displayBackgroundImage"), page?.backgroundImage);
-    })
+    }, () => showBlack("展示權限已變更，請等待老師重新投影。"))
   );
 }
 

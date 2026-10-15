@@ -9,7 +9,9 @@ import { BoardEngine } from "../canvas/BoardEngine.js";
 import { StickyNotesLayer } from "../notes/StickyNotesLayer.js";
 import { StudentTextLayer } from "../text/StudentTextLayer.js";
 import { normalizeBoardPages } from "../whiteboard/pages.js";
-import { setBackgroundViewport, showBackgroundImage } from "../whiteboard/backgroundImage.js";
+import { clearBackgroundImage, setBackgroundViewport, showBackgroundImage } from "../whiteboard/backgroundImage.js";
+import { materialCache } from "../whiteboard/materialCache.js";
+import { setMaterialSession } from "../firebase/materialRepository.js";
 import { param } from "../utils/url.js";
 import { isClassroomExpired, watchClassroomExpiry } from "../utils/classroomExpiration.js";
 import { explainError, toast } from "../utils/ui.js";
@@ -47,6 +49,12 @@ watchConnection(document.querySelector("#connectionBadge"));
 document.querySelector("#studentBackgroundImage").addEventListener("error", () => toast("題目底圖載入失敗，請通知老師檢查 Google Drive 分享權限。", "error"));
 
 function setMessage(text) {
+  stopPage();
+  lifecycleOffs.forEach((off) => off?.()); lifecycleOffs = [];
+  presenceStop?.(); presenceStop = null;
+  document.querySelector("#newMaterialNotice").hidden = true;
+  clearBackgroundImage(document.querySelector("#studentBackgroundImage"));
+  materialCache.clear(student?.classId);
   message.textContent = text;
   message.hidden = false;
   stage.hidden = true;
@@ -66,11 +74,14 @@ function renderPageControls() {
 }
 
 function renderBackground() {
+  if (!message.hidden) return;
   const page = pages.find((item) => item.id === currentPageId);
   showBackgroundImage(document.querySelector("#studentBackgroundImage"), page?.backgroundImage);
 }
 
 function stopPage() {
+  clearTimeout(activeTimer);
+  clearBackgroundImage(document.querySelector("#studentBackgroundImage"));
   pageOffs.forEach((off) => off?.());
   pageOffs = [];
   stickyNotes?.destroy();
@@ -204,30 +215,40 @@ async function init() {
       if (!bound) return setMessage("白板剛被其他裝置綁定，請聯絡老師。");
       student.studentUid = user.uid;
     }
+    await setMaterialSession(student.classId, user.uid, student.id, token);
 
     document.querySelector("#studentName").textContent = student.displayName;
     document.querySelector("#seatNumber").textContent = ` ${student.seatNumber}`;
     message.hidden = true;
     stage.hidden = false;
     toolbar.hidden = false;
+    bindToolbar();
     openPage(currentPageId, false);
     try { presenceStop = await startPresence(student.classId, student.id, user.uid, currentPageId); }
     catch (error) { toast("白板已開啟，但在線狀態暫時無法同步。", "error"); console.error(error); }
+    let pagesLoaded = false;
     lifecycleOffs.push(watchBoardPages(token, (value) => {
+      const previous = new Set(pages.map((page) => page.id));
       pages = normalizeBoardPages(value);
+      const added = pages.filter((page) => !previous.has(page.id) && page.backgroundImage?.type === "rtdb-capture");
+      if (pagesLoaded && added.length) {
+        const latest = added.at(-1), notice = document.querySelector("#newMaterialNotice");
+        notice.hidden = false; notice.querySelector("span").textContent = `老師已新增題目，第 ${pages.findIndex((p) => p.id === latest.id) + 1} 頁`;
+        notice.querySelector("button").onclick = () => { notice.hidden = true; openPage(latest.id); };
+      }
+      pagesLoaded = true;
       if (!pages.some((page) => page.id === currentPageId)) openPage(pages[0].id);
       else { renderPageControls(); renderBackground(); }
-    }));
+    }, () => { stopPage(); setMessage("白板權限已變更，請向老師確認連結。"); }));
     lifecycleOffs.push(watchStudent(student.id, (value) => {
-      if (!value) return setMessage("白板已被老師刪除。");
+      if (!value) { stopPage(); return setMessage("白板已被老師刪除。"); }
       student = value;
       const locked = value.locked || !value.enabled;
       applyInputMode();
       document.querySelector("#lockBadge").hidden = !locked;
-      if (value.studentUid !== user.uid) setMessage("此白板的裝置綁定已變更，請聯絡老師。");
-    }));
+      if (value.studentUid !== user.uid || value.boardToken !== token || !value.enabled) { stopPage(); setMessage("此白板的裝置綁定或連結已變更，請聯絡老師。"); }
+    }, () => { stopPage(); setMessage("白板權限已變更，請向老師確認連結。"); }));
     setSync("已同步", "synced");
-    bindToolbar();
   } catch (error) {
     setMessage(explainError(error, "student"));
     setSync("開啟失敗", "error");
@@ -264,6 +285,7 @@ addEventListener("pagehide", () => {
   clearTimeout(activeTimer);
   expirationOff?.(); expirationTimerOff?.();
   stopPage();
+  materialCache.clear(student?.classId);
   lifecycleOffs.forEach((off) => off?.());
   presenceStop?.();
   if (user && student) clearActive(token, "student", user.uid);

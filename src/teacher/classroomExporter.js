@@ -6,6 +6,7 @@ import { drawStudentText, hasStudentText } from "../text/StudentTextLayer.js";
 import { backgroundImageDrawRect, googleDriveCanvasImageUrl, normalizeBackgroundImage } from "../whiteboard/backgroundImage.js";
 import { drawStickyNotes, hasStickyNotes, stickyNoteValues } from "../notes/StickyNotesLayer.js";
 import { loadCachedCanvasImage } from "./backgroundImageCache.js";
+import { materialCache } from "../whiteboard/materialCache.js";
 
 export const MAX_EXPORT_BYTES = 250 * 1024 * 1024;
 
@@ -29,6 +30,15 @@ export function loadCanvasImage(url) {
 export async function drawPageBackground(context, value, width = 1600, height = 1200, loadImage = loadCanvasImage) {
   const background = normalizeBackgroundImage(value);
   if (!background) return false;
+  if (background.type === "rtdb-capture") {
+    const resource = await materialCache.acquire(background);
+    try {
+      const rect = backgroundImageDrawRect(background, resource.image.naturalWidth, resource.image.naturalHeight, width, height);
+      if (!rect) throw new Error("無法計算教材匯出尺寸。");
+      context.drawImage(resource.image, rect.x, rect.y, rect.width, rect.height);
+      return true;
+    } finally { resource.release(); }
+  }
   const imageUrl = googleDriveCanvasImageUrl(background);
   const image = await loadImage(imageUrl);
   const rect = backgroundImageDrawRect(background, image.naturalWidth || image.width, image.naturalHeight || image.height, width, height);

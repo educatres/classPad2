@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { drawPageBackground, exportClassroomZip, sanitizeFilename } from "../src/teacher/classroomExporter.js";
+import { materialCache } from "../src/whiteboard/materialCache.js";
 
 const classroom = {
   title: "自然課",
@@ -11,6 +12,17 @@ const classroom = {
 };
 
 describe("全班作品匯出", () => {
+  it("單張及 ZIP 的共用合成路徑包含截圖；載入失敗不得交付空底圖", async () => {
+    const background = { type: "rtdb-capture", classId: "class-1", assetId: "page_ABCDEF", scale: .5, x: .25, y: .75 };
+    const image = { naturalWidth: 800, naturalHeight: 400 }, release = vi.fn(), context = { drawImage: vi.fn() };
+    const acquire = vi.spyOn(materialCache, "acquire").mockResolvedValueOnce({ image, release });
+    try {
+      await expect(drawPageBackground(context, background)).resolves.toBe(true);
+      expect(context.drawImage).toHaveBeenCalledWith(image, 0, 700, 800, 400); expect(release).toHaveBeenCalledOnce();
+      acquire.mockRejectedValueOnce(new Error("教材載入失敗"));
+      await expect(drawPageBackground(context, background)).rejects.toThrow("教材載入失敗");
+    } finally { acquire.mockRestore(); }
+  });
   it("只輸出有任一圖層筆跡的頁面，並列出完全空白的學生", async () => {
     const students = [
       { id: "student-1", boardToken: "token-1", seatNumber: "01", displayName: "王小明" },

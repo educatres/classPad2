@@ -57,6 +57,7 @@ describe("addStudents", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     databaseMocks.update.mockResolvedValue();
+    databaseMocks.get.mockResolvedValue({ val: () => null });
   });
 
   it("允許每班加入 80 位學生", async () => {

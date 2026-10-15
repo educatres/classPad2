@@ -52,6 +52,12 @@ export function boardPagesMap(value, fallback = {}) {
   }]));
 }
 
+export function canonicalBoardPagesMap(value, fallback = {}) {
+  const pages = boardPagesMap(value, fallback);
+  for (const page of Object.values(value || {})) if (pages[page.id] && Number.isFinite(page.order)) pages[page.id].order = page.order;
+  return pages;
+}
+
 export function selectMonitoredPage(studentPresence, pagesValue, boardActivity) {
   const pages = normalizeBoardPages(pagesValue);
   const available = new Set(pages.map((page) => page.id));

@@ -1,5 +1,6 @@
 import { googleDriveCanvasImageUrl } from "../whiteboard/backgroundImage.js";
 import { normalizeBoardPages } from "../whiteboard/pages.js";
+import { materialCache } from "../whiteboard/materialCache.js";
 
 const CACHE_NAME = "classpad-export-backgrounds-v1";
 
@@ -91,12 +92,17 @@ export function createBackgroundImageCache({
 export const exportBackgroundImageCache = createBackgroundImageCache();
 
 export function classroomBackgroundImageUrls(classroom) {
-  return [...new Set(normalizeBoardPages(classroom?.boardPages).map((page) => googleDriveCanvasImageUrl(page.backgroundImage)).filter(Boolean))];
+  return [...new Set(normalizeBoardPages(classroom?.boardPages).map((page) => page.backgroundImage?.type === "rtdb-capture" ? `rtdb-capture:${page.backgroundImage.classId}/${page.backgroundImage.assetId}` : googleDriveCanvasImageUrl(page.backgroundImage)).filter(Boolean))];
 }
 
 export async function precacheClassroomBackgrounds(classroom, cache = exportBackgroundImageCache) {
   const urls = classroomBackgroundImageUrls(classroom);
-  await Promise.all(urls.map((url) => cache.precache(url)));
+  await Promise.all(urls.map(async (url) => {
+    if (url.startsWith("rtdb-capture:")) {
+      const [classId, assetId] = url.slice("rtdb-capture:".length).split("/");
+      const resource = await materialCache.acquire({ classId, assetId }); resource.release();
+    } else await cache.precache(url);
+  }));
   return { count: urls.length, urls };
 }
 

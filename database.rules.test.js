@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { afterAll, beforeAll, describe, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, it, expect } from "vitest";
 import { assertFails, assertSucceeds, initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import { get, ref, set, update } from "firebase/database";
 
@@ -9,6 +9,110 @@ afterAll(()=>env?.cleanup());
 const stroke=(uid,color="#112233")=>({id:"stroke_1",tool:"pen",color,width:4,opacity:1,points:[[.1,.1,.5,0],[.2,.2,.5,10]],createdAt:2,authorUid:uid});
 const stickyNote=(uid,overrides={})=>({id:"note_1",text:"請看這裡",color:"yellow",x:.1,y:.1,width:.3,height:.2,createdAt:2,updatedAt:2,authorUid:uid,...overrides});
 const studentText=(uid,overrides={})=>({text:"這是文字作答",scrollTop:0,layoutVersion:1,updatedAt:2,authorUid:uid,...overrides});
+
+describe("PDF 截圖教材權限", () => {
+  let capClass, capStudent, capBoard, teacher, studentDb, stranger, now;
+  const assetId = "page_CAPTURE123", otherId = "page_CAPTURE456", displayToken = "CAPTUREabcdefgh234567890";
+  let asset, page;
+  let counter = 0;
+  beforeEach(async () => {
+    capClass = `capture-class-${++counter}`; capStudent = `capture-student-${counter}`; capBoard = `CaptureBoardToken${String(counter).padStart(8, "0")}`; now = Date.now();
+    teacher = env.authenticatedContext("capture-teacher").database(); studentDb = env.authenticatedContext("capture-student").database(); stranger = env.authenticatedContext("capture-stranger").database();
+    asset = { version: 1, mimeType: "image/jpeg", base64: "/9j/2Q==", width: 10, height: 10, byteLength: 4, createdAt: now, createdBy: "capture-teacher" };
+    page = { id: assetId, order: 1, createdAt: now, createdBy: "capture-teacher", backgroundImage: { type: "rtdb-capture", classId: capClass, assetId, scale: 1, x: .5, y: .5, updatedAt: now, updatedBy: "capture-teacher" } };
+    const main = { id: "main", order: 0, createdAt: now, createdBy: "capture-teacher" };
+    await env.withSecurityRulesDisabled((context) => update(ref(context.database()), {
+      [`classes/${capClass}`]: { title: "教材測試", createdAt: now, expiresAt: now + 10800000, updatedAt: now, status: "active", admins: { "capture-teacher": true }, studentOrder: { [capStudent]: 0 }, boardPages: { main } },
+      [`students/${capStudent}`]: { classId: capClass, boardToken: capBoard, studentUid: "capture-student", enabled: true, locked: false, seatNumber: "1", displayName: "學生", createdAt: now, updatedAt: now },
+      [`boardLookup/${capBoard}`]: { classId: capClass, studentId: capStudent },
+      [`boardPages/${capBoard}`]: { main }
+    }));
+  });
+  const send = () => assertSucceeds(update(ref(teacher), {
+    [`classMaterials/${capClass}/${assetId}`]: asset,
+    [`classes/${capClass}/boardPages/${assetId}`]: page,
+    [`boardPages/${capBoard}/${assetId}`]: page,
+    [`classes/${capClass}/updatedAt`]: now
+  }));
+  const bindSession = () => set(ref(studentDb, `classMaterialSessions/${capClass}/capture-student`), { studentId: capStudent, boardToken: capBoard });
+  it("首次原子派送成功，只有老師及有效綁定且有該頁參照的學生可讀單張", async () => {
+    await send(); await assertSucceeds(bindSession());
+    await assertSucceeds(get(ref(teacher, `classMaterials/${capClass}/${assetId}`)));
+    await assertSucceeds(get(ref(studentDb, `classMaterials/${capClass}/${assetId}`)));
+    await assertFails(get(ref(stranger, `classMaterials/${capClass}/${assetId}`)));
+    await assertFails(get(ref(env.authenticatedContext("teacher").database(), `classMaterials/${capClass}/${assetId}`)));
+    await assertFails(get(ref(studentDb, `classMaterials/${capClass}`)));
+    await assertFails(get(ref(teacher, `classMaterials/${capClass}`)));
+    await assertFails(set(ref(studentDb, `classMaterials/${capClass}/${otherId}`), { ...asset, createdBy: "capture-student" }));
+    await assertSucceeds(set(ref(teacher, `classMaterials/${capClass}/${otherId}`), asset));
+    await assertFails(get(ref(studentDb, `classMaterials/${capClass}/${otherId}`)));
+  });
+  it("拒絕偽造 session、他人 session 與額外欄位，只能刪自己的 session", async () => {
+    const session = { studentId: capStudent, boardToken: capBoard };
+    await assertFails(set(ref(stranger, `classMaterialSessions/${capClass}/capture-stranger`), session));
+    await assertFails(set(ref(studentDb, `classMaterialSessions/${capClass}/someone-else`), session));
+    await assertFails(set(ref(studentDb, `classMaterialSessions/${capClass}/capture-student`), { ...session, extra: true }));
+    await assertSucceeds(bindSession());
+    await assertFails(get(ref(stranger, `classMaterialSessions/${capClass}/capture-student`)));
+    await assertFails(get(ref(studentDb, `classMaterialSessions/${capClass}`)));
+    await assertSucceeds(set(ref(studentDb, `classMaterialSessions/${capClass}/capture-student`), null));
+  });
+  it("解除綁定、停用、換 token 或跨班後舊 session 立刻失去教材權限", async () => {
+    await send(); await bindSession();
+    for (const changes of [{ studentUid: null }, { enabled: false }, { boardToken: "NewCaptureBoardToken123456" }, { classId: "another-class" }]) {
+      await env.withSecurityRulesDisabled((context) => update(ref(context.database(), `students/${capStudent}`), changes));
+      await assertFails(get(ref(studentDb, `classMaterials/${capClass}/${assetId}`)));
+      await assertFails(bindSession());
+      await env.withSecurityRulesDisabled((context) => update(ref(context.database(), `students/${capStudent}`), { studentUid: "capture-student", enabled: true, boardToken: capBoard, classId: capClass }));
+    }
+    await env.withSecurityRulesDisabled((context) => set(ref(context.database(), `boardLookup/${capBoard}`), null));
+    await assertFails(get(ref(studentDb, `classMaterials/${capClass}/${assetId}`)));
+  });
+  it("拒絕跨班參照、錯誤 assetId、main 及任意 Data URL", async () => {
+    for (const background of [{ ...page.backgroundImage, classId: "other-class" }, { ...page.backgroundImage, assetId: otherId }, { ...page.backgroundImage, sourceUrl: "data:image/jpeg;base64,AAAA" }]) {
+      await assertFails(set(ref(teacher, `classes/${capClass}/boardPages/${assetId}`), { ...page, backgroundImage: background }));
+      await assertFails(set(ref(teacher, `boardPages/${capBoard}/${assetId}`), { ...page, backgroundImage: background }));
+    }
+    await assertFails(set(ref(teacher, `classes/${capClass}/boardPages/main/backgroundImage`), page.backgroundImage));
+  });
+  it("限制 MIME、Base64、大小、整數尺寸、作者、時間及未知欄位", async () => {
+    for (const fields of [{ mimeType: "image/png" }, { base64: "data:AAAA" }, { base64: "AA=A" }, { base64: "A".repeat(349532) }, { width: 1601 }, { height: 1.5 }, { byteLength: 262145 }, { byteLength: 0 }, { createdBy: "someone" }, { createdAt: now + 120000 }, { filename: "private.pdf" }, { version: 2 }]) await assertFails(set(ref(teacher, `classMaterials/${capClass}/${assetId}`), { ...asset, ...fields }));
+    await assertSucceeds(set(ref(teacher, `classMaterials/${capClass}/${assetId}`), { ...asset, width: 1600, byteLength: 262144, base64: "A".repeat(349526) + "==" }));
+  });
+  it("immutable 資產不能逐欄修改或從父層覆蓋，位置比例仍可調整", async () => {
+    await send();
+    await assertFails(update(ref(teacher, `classMaterials/${capClass}/${assetId}`), { width: 20 }));
+    await assertFails(set(ref(teacher, `classMaterials/${capClass}`), { [assetId]: { ...asset, createdBy: "other" } }));
+    await assertFails(set(ref(teacher, `classMaterials/${capClass}`), { [assetId]: { ...asset, base64: "AAAA" } }));
+    await assertSucceeds(update(ref(teacher), { [`classes/${capClass}/boardPages/${assetId}/backgroundImage/scale`]: .8, [`boardPages/${capBoard}/${assetId}/backgroundImage/scale`]: .8 }));
+    await assertFails(set(ref(teacher, `classes/${capClass}/boardPages/${assetId}/backgroundImage`), { sourceUrl: "https://drive.google.com/a", imageUrl: "https://drive.google.com/thumbnail?id=abcdefghij&sz=w2000", scale: 1, updatedAt: now, updatedBy: "capture-teacher" }));
+  });
+  it("展示僅可讀取合法目前投影頁，切頁及取消投影立即撤權", async () => {
+    await send(); const screen = env.authenticatedContext("capture-screen").database();
+    await env.withSecurityRulesDisabled((context) => update(ref(context.database()), {
+      [`classes/${capClass}/displayToken`]: displayToken,
+      [`displays/${displayToken}`]: { classId: capClass, active: true, boardToken: capBoard, studentId: capStudent, pageId: assetId, label: "題目", followStudent: true, updatedAt: now, updatedBy: "capture-teacher" }
+    }));
+    await assertSucceeds(set(ref(screen, "displaySessions/capture-screen"), { displayToken, boardToken: capBoard, updatedAt: now }));
+    await assertSucceeds(get(ref(screen, `classMaterials/${capClass}/${assetId}`)));
+    await assertSucceeds(update(ref(teacher, `displays/${displayToken}`), { pageId: "main" }));
+    await assertFails(get(ref(screen, `classMaterials/${capClass}/${assetId}`)));
+    await assertSucceeds(update(ref(teacher, `displays/${displayToken}`), { pageId: assetId, active: false }));
+    await assertFails(get(ref(screen, `classMaterials/${capClass}/${assetId}`)));
+    await assertFails(set(ref(screen, `classMaterials/${capClass}/${assetId}`), asset));
+  });
+  it("關閉或到期禁止派送，到期學生不可讀，但老師可原子清除整班教材與 sessions", async () => {
+    await send(); await bindSession();
+    await assertSucceeds(update(ref(teacher, `classes/${capClass}`), { status: "closed" }));
+    await assertFails(set(ref(teacher, `classMaterials/${capClass}/${otherId}`), asset));
+    await env.withSecurityRulesDisabled((context) => update(ref(context.database(), `classes/${capClass}`), { createdAt: now - 10800001, expiresAt: now - 1 }));
+    await assertFails(get(ref(studentDb, `classMaterials/${capClass}/${assetId}`)));
+    await assertFails(bindSession());
+    await assertFails(set(ref(teacher, `classMaterials/${capClass}/${otherId}`), asset));
+    await assertSucceeds(update(ref(teacher), { [`classes/${capClass}`]: null, [`classMaterials/${capClass}`]: null, [`classMaterialSessions/${capClass}`]: null, [`students/${capStudent}`]: null, [`boardPages/${capBoard}`]: null, [`boardLookup/${capBoard}`]: null }));
+    await env.withSecurityRulesDisabled(async (context) => { expect((await get(ref(context.database(), `classMaterials/${capClass}`))).exists()).toBe(false); });
+  });
+});
 describe("Realtime Database 權限",()=>{
   it("所有已登入使用者可讀精簡課程目錄且只有老師可同步",async()=>{const teacherDb=env.authenticatedContext("teacher").database(),otherDb=env.authenticatedContext("other-directory-reader").database(),unauthenticatedDb=env.unauthenticatedContext().database(),path=`publicClasses/${classId}`;await assertSucceeds(get(ref(otherDb,"publicClasses")));await assertFails(get(ref(unauthenticatedDb,"publicClasses")));await assertFails(update(ref(otherDb,path),{status:"closed"}));await assertFails(update(ref(teacherDb,path),{title:"偽造名稱"}));await assertFails(update(ref(teacherDb,path),{privateData:"不可公開"}));const classroom=(await get(ref(teacherDb,`classes/${classId}`))).val();await assertSucceeds(set(ref(teacherDb,path),{title:classroom.title,className:classroom.className,createdAt:classroom.createdAt,expiresAt:classroom.expiresAt,updatedAt:classroom.updatedAt,status:classroom.status,studentCount:classroom.studentCount}));});
   it("新課程只能設定為建立後 3 小時到期",async()=>{const db=env.authenticatedContext("new-class-teacher").database(),now=Date.now(),base={title:"三小時課堂",className:"",activityName:"",createdAt:now,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:0,admins:{"new-class-teacher":true}};await assertSucceeds(set(ref(db,"classes/three-hour-class"),{...base,expiresAt:now+10_800_000}));await assertFails(set(ref(db,"classes/twelve-hour-class"),{...base,expiresAt:now+43_200_000}));});

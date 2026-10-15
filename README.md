@@ -30,11 +30,26 @@
 - 4:3 固定白板比例，4／6／8／12 格即時監看、釘選優先排序、搜尋/篩選/輪播、全螢幕批注
 - 永久老師連結與未遮蔽六位數密鑰，密鑰正確即可登入，不限老師連線數量
 - 老師鎖定、清除圖層、本機合成下載 PNG
+- 本機 PDF 翻頁、縮放、矩形框選、截圖預覽暫存，確認後派送為全班新白板
 - 拒絕預設存取的 Firebase Security Rules 與 Emulator 權限測試
+
+## PDF 題目派送
+
+在老師管理頁按「PDF 題目派送」，開啟本機 PDF，使用「框選」拖曳題目範圍或按「選取整頁」。檢查下方截圖預覽與大小後，按「派送為新白板」。瀏覽模式可捲動；翻頁與縮放會清除舊選取，可在同一份 PDF 反覆選題派送。
+
+每次派送會在全班頁面末尾新增一頁，保留所有既有作答。學生會看到新題目提示，可自行按「開啟題目」，不會被強制切頁。晚加入或重新整理的學生仍可取得教材。監看、放大批注、被動展示、單張 PNG 與全班 ZIP 都會包含題目；只有題目、沒有任何筆記的頁面維持略過 ZIP 匯出。
+
+PDF 原檔、檔名與本機路徑不會上傳，解析與裁切均在老師瀏覽器執行。**僅老師確認派送的 JPEG 截圖會存入 Realtime Database，保留到課堂清除。** 未派送截圖只留在視窗記憶體，關閉或重新整理即清除；不提供一般圖片或檔案上傳，不使用 Firebase Storage。截圖讀取採有上限的記憶體快取，不保存至 localStorage、IndexedDB 或 CacheStorage。
+
+初版限制：PDF 最多 30 MiB、200 頁；截圖長邊最多 1600 像素、256 KiB；介面每課堂最多派送 20 張。加密 PDF 需先解除密碼。僅進行中且未到期的課堂可派送，離線時不開始；連線中斷後會等待寫入確認，重試沿用同一操作 ID。成功訊息表示資料庫已確認新增頁面，不表示每台學生裝置皆已收件。
+
+截圖只保存於 `classMaterials/{classId}/{pageId}`，頁面使用 `rtdb-capture` 參照。`classMaterialSessions/{classId}/{uid}` 只定位已綁定學生白板；每次讀取仍由 Rules 驗證目前 UID、token、啟用狀態、期限與該頁參照。老師關閉本機 PDF 不影響已派送教材。沿用建立滿三小時失效政策，由下一次有權老師開啟前端時清除教材與 session；沒有伺服器背景排程。仍消耗 Spark 的資料庫儲存、下載與連線額度，並非無限免費。
+
+本次功能需一併更新 `database.rules.json` 後才可在線上使用。PDF.js 與 worker 固定為同一版本；Vite 會打包同版的 CMap、標準字型、WASM 與 ICC 資產，遵守 GitHub Pages 子路徑，學生入口不載入 PDF.js。請勿只部署前端而保留舊規則。
 
 ## 本機開發
 
-需求：Node.js 22、pnpm 11、Java（只在執行 Firebase Emulator 時需要）。
+需求：Node.js 22、pnpm 11、Java 21（只在執行 Firebase Emulator 時需要）。
 
 ```bash
 cp .env.example .env
@@ -53,6 +68,7 @@ pnpm build
 ```
 
 `test:rules` 會啟動 Authentication 與 Realtime Database Emulator，驗證老師、學生、其他匿名使用者和未登入使用者的允許/拒絕案例。
+可使用 `npm run test:rules -- --project demo-classpad` 在示範專案中驗證規則；Windows PowerShell 若停用 npm.ps1，可使用 `npm.cmd test`、`npm.cmd run build` 與 `npm.cmd run test:rules -- --project demo-classpad`。
 
 ## Firebase 設定
 
