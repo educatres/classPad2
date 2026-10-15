@@ -29,7 +29,7 @@ let pageOffs = [], lifecycleOffs = [];
 let activeTimer;
 let presenceDrawing = false;
 let lastActivityAt = 0, lastActivityPageId = "";
-const drawingSettings = { tool: "pen", color: "#173f5f", width: 5, smoothing: loadStudentSmoothing() };
+const drawingSettings = { tool: "pen", color: "#000000", width: 5, smoothing: loadStudentSmoothing() };
 let activeMode = "pen";
 
 function loadStudentSmoothing() {
@@ -270,7 +270,7 @@ function bindToolbar() {
     applyInputMode();
   });
   document.querySelector("#textToolBtn").onclick = () => { activeMode = "text"; applyInputMode({ focus: true }); };
-  document.querySelector("#colorInput").oninput = (event) => { drawingSettings.color = event.target.value; engine?.setColor(drawingSettings.color); };
+  document.querySelector("#colorInput").onchange = (event) => { drawingSettings.color = event.target.value; engine?.setColor(drawingSettings.color); };
   document.querySelector("#widthInput").onchange = (event) => { drawingSettings.width = event.target.value; engine?.setWidth(drawingSettings.width); };
   document.querySelector("#undoBtn").onclick = () => engine?.undo();
   document.querySelector("#redoBtn").onclick = () => engine?.redo();

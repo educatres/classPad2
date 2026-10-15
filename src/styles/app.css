@@ -1042,10 +1042,12 @@ dialog form {
   min-width: 36px;
   font-size: 0;
 }
-.board-toolbar label.brush-size-tool {
+.board-toolbar label.brush-size-tool,
+.board-toolbar label.student-color-tool {
   min-width: 82px;
 }
-.brush-size-tool select {
+.brush-size-tool select,
+.student-color-tool select {
   min-width: 82px;
   padding: 0.35rem 0.45rem;
   border: 1px solid var(--border);
