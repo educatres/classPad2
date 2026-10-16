@@ -3,13 +3,13 @@ import { layoutPdfPages, PAGE_LABEL_HEIGHT, PAGE_PADDING, pdfScrollAnchor, resto
 
 // All pages have stable placeholders. Only a bounded set of nearby pages has a bitmap.
 export class PdfPageViewer {
-  constructor(scroller, { onSelect, onPageChange, onError }) {
-    Object.assign(this, { scroller, onSelect, onPageChange, onError });
+  constructor(scroller, { onSelect, onPageChange, onError, onViewChange }) {
+    Object.assign(this, { scroller, onSelect, onPageChange, onError, onViewChange });
     this.list = document.createElement("div"); this.list.className = "pdf-pages";
     scroller.append(this.list);
     this.entries = []; this.layout = []; this.wanted = []; this.zoom = 1; this.current = 1;
     this.visible = true; this.enabled = true; this.generation = 0;
-    this.scrollListener = () => this.schedule();
+    this.scrollListener = () => { this.schedule(); if (this.visible) this.onViewChange?.(); };
     scroller.addEventListener("scroll", this.scrollListener, { passive: true });
     this.observer = new ResizeObserver(() => {
       clearTimeout(this.resizeTimer);
@@ -37,7 +37,7 @@ export class PdfPageViewer {
 
   resize(preserve = true) {
     if (!this.visible || !this.pdf || !this.scroller.clientWidth || this.destroyed) return;
-    const anchor = preserve ? pdfScrollAnchor(this.layout, this.scroller.scrollTop) : null;
+    const view = this.savedView || (preserve ? this.getView() : null);
     const width = this.scroller.clientWidth;
     this.layout = layoutPdfPages(this.entries.map((entry) => entry.size), width, this.zoom);
     const contentWidth = Math.max(width, ...this.layout.map((entry) => entry.width + PAGE_PADDING * 2));
@@ -52,8 +52,11 @@ export class PdfPageViewer {
       const key = `${Math.round(item.width)}:${Math.round(item.height)}`;
       if (entry.key !== key) { entry.key = key; entry.task?.cancel(); if (!entry.task) this.release(entry); entry.failedKey = null; }
     }
-    this.scroller.scrollTop = restorePdfAnchor(this.layout, anchor);
+    this.scroller.scrollTop = restorePdfAnchor(this.layout, view?.anchor);
+    this.scroller.scrollLeft = (view?.left || 0) * Math.max(0, this.scroller.scrollWidth - this.scroller.clientWidth);
+    this.savedView = null;
     this.schedule();
+    this.onViewChange?.();
   }
 
   schedule() {
@@ -127,7 +130,19 @@ export class PdfPageViewer {
   }
   setBrowsing(value) { this.browsing = value; this.scroller.classList.toggle("selecting", !value); this.cancelDrag(); }
   setEnabled(value) { this.enabled = value; if (!value) this.cancelDrag(); }
+  getView() {
+    return this.savedView || { zoom: this.zoom, anchor: pdfScrollAnchor(this.layout, this.scroller.scrollTop), left: this.scroller.scrollLeft / Math.max(1, this.scroller.scrollWidth - this.scroller.clientWidth) || 0 };
+  }
+  restoreView(view) {
+    if (!view) return;
+    const zoom = Number.isFinite(view.zoom) ? Math.max(.5, Math.min(3, view.zoom)) : 1;
+    const anchor = Number.isInteger(view.anchor?.number) && Number.isFinite(view.anchor?.fraction) ? view.anchor : null;
+    this.zoom = zoom;
+    this.savedView = { zoom, anchor, left: Number.isFinite(view.left) ? Math.max(0, Math.min(1, view.left)) : 0 };
+    this.resize();
+  }
   setVisible(value) {
+    if (!value && this.visible) this.savedView = this.getView();
     this.visible = value;
     if (value) this.resize();
     else { this.cancelDrag(); this.entries.forEach((entry) => entry.task?.cancel()); }
@@ -173,7 +188,7 @@ export class PdfPageViewer {
   reset() {
     this.generation++; this.cancelDrag(); this.selection = null; this.wanted = [];
     for (const entry of this.entries) { entry.task?.cancel(); if (!entry.task) this.release(entry); }
-    this.entries = []; this.layout = []; this.pdf = null; this.zoom = 1; this.current = 1;
+    this.entries = []; this.layout = []; this.pdf = null; this.savedView = null; this.zoom = 1; this.current = 1;
     this.list.replaceChildren(); this.list.style.height = "0px"; this.scroller.scrollTop = this.scroller.scrollLeft = 0;
   }
   destroy() {

@@ -12,11 +12,11 @@ import { PdfPageViewer } from "./PdfPageViewer.js";
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 export class PdfCapturePanel {
-  constructor(container, { classId, uid, isActive, onHide, onSuccess }) {
-    Object.assign(this, { container, classId, uid, isActive, onSuccess });
+  constructor(container, { classId, uid, isActive, onHide, onSuccess, session }) {
+    Object.assign(this, { container, classId, uid, isActive, onSuccess, session });
     this.sequence = 0; this.visible = true;
     container.innerHTML = `<div class="pdf-panel-head"><h2>PDF 題目派送</h2><button data-hide type="button">隱藏面板</button></div>
-      <p class="pdf-panel-hint">PDF 僅在本機開啟；隱藏後保留閱讀位置，重新整理需重新載入。每課堂最多派送 20 張。</p>
+      <p class="pdf-panel-hint">PDF 僅在本機開啟；同一分頁切換功能、隱藏面板或重新整理後保留 PDF 與閱讀位置，關閉分頁後需重新選檔。每課堂最多派送 20 張。</p>
       <div class="pdf-panel-tools"><div class="pdf-toolbar"><button data-open type="button" class="primary">載入 PDF</button><input type="file" accept=".pdf,application/pdf" hidden>
         <label class="pdf-page-jump">頁碼 <input data-jump type="number" min="1" value="1" aria-label="跳至 PDF 頁碼"><span data-count>／0</span></label><button data-go type="button">前往</button></div>
       <div class="pdf-toolbar"><button data-out type="button" aria-label="縮小 PDF">−</button><output data-zoom>100%</output><button data-in type="button" aria-label="放大 PDF">＋</button><button data-fit type="button">符合寬度</button></div>
@@ -33,7 +33,8 @@ export class PdfCapturePanel {
     this.$$ = (selector) => this.dialog.querySelector(selector);
     this.editor = new CapturePlacementEditor(this.$$('[data-layout]'), () => { this.clearCapture(); this.setBrowsing(false); this.message("請重新框選題目範圍，或截取目前整頁。"); });
     this.viewer = new PdfPageViewer(this.$(".pdf-continuous-scroll"), {
-      onSelect: (selection) => this.prepareCapture(selection), onPageChange: (number) => { this.$("[data-jump]").value = number; }, onError: (text) => this.message(text)
+      onSelect: (selection) => this.prepareCapture(selection), onPageChange: (number) => { this.$("[data-jump]").value = number; }, onError: (text) => this.message(text),
+      onViewChange: () => { clearTimeout(this.viewTimer); this.viewTimer = setTimeout(() => this.remember(), 120); }
     });
     this.$("[data-hide]").onclick = onHide;
     this.$("[data-open]").onclick = () => this.$("input[type=file]").click();
@@ -60,6 +61,8 @@ export class PdfCapturePanel {
       this.controls();
     });
     this.timer = setInterval(() => this.refresh(), 1000); this.refresh();
+    this.visibilityListener = () => { if (document.visibilityState === "hidden") this.remember(); };
+    document.addEventListener("visibilitychange", this.visibilityListener);
   }
 
   message(text) {
@@ -73,7 +76,7 @@ export class PdfCapturePanel {
   }
   controls() {
     if (this.destroyed || !this.viewer) return;
-    const locked = Boolean(this.busy || this.sending || this.operation), hasPdf = Boolean(this.pdf);
+    const locked = Boolean(this.busy || this.restoring || this.sending || this.operation), hasPdf = Boolean(this.pdf);
     this.$("[data-open]").disabled = locked;
     for (const name of ["out", "in", "fit", "browse", "select", "all", "go", "jump"]) this.$(`[data-${name}]`).disabled = !hasPdf || this.busy || this.sending || (name === "all" && Boolean(this.capture));
     this.$("[data-preview]").disabled = !this.capture || this.busy;
@@ -90,38 +93,79 @@ export class PdfCapturePanel {
     this.$("[data-mode]").textContent = value ? "上下滑動閱讀所有頁面；要擷取題目時請切換「框選截圖」。" : "在單一頁面拖曳框選；如需上下滑動，請切回「瀏覽」。";
   }
   zoom(value) { this.viewer.setZoom(value); this.$("[data-zoom]").textContent = `${Math.round(this.viewer.zoom * 100)}%`; }
-  setVisible(value) { this.visible = value; this.viewer.setVisible(value); if (!value && this.dialog.open) this.dialog.close(); }
-  get hasPending() { return Boolean(this.busy || this.capture || this.sending || this.operation); }
+  setVisible(value) { this.visible = value; this.viewer.setVisible(value); this.remember(); if (!value && this.dialog.open) this.dialog.close(); }
+  get hasPending() { return Boolean(this.busy || this.restoring || this.capture || this.sending || this.operation); }
 
-  async load(file) {
-    if (this.busy || this.sending || this.operation) return;
+  remember() {
+    if (!this.persisted || this.busy || !this.pdf || this.destroyed) return;
+    try { this.session?.remember({ view: this.viewer.getView(), open: this.visible }); }
+    catch { this.message("無法保存 PDF 閱讀位置；請檢查瀏覽器是否允許本機暫存。"); }
+  }
+
+  async restore() {
+    if (!this.session?.state) return;
+    this.restoring = true; this.controls(); this.message("正在還原 PDF 與閱讀位置…");
+    try {
+      const saved = await this.session.read();
+      if (this.destroyed) return;
+      this.restoring = false;
+      if (saved) await this.load(saved.file, { restoring: true, view: saved.view });
+      else this.message("PDF 暫存已被瀏覽器清除，請重新載入 PDF。");
+    } catch {
+      await this.session.clear().catch(() => {});
+      this.message("無法還原 PDF 暫存，請重新載入 PDF。");
+    } finally { this.restoring = false; this.controls(); }
+  }
+
+  async load(file, { restoring = false, view } = {}) {
+    if (this.busy || this.restoring || this.sending || this.operation) return;
     if (file.size > PDF_LIMITS.fileBytes) { this.message("PDF 超過 30 MiB，請先縮小檔案。"); return; }
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") { this.message("此檔案不是可讀取的 PDF，請重新選擇。"); return; }
     if (this.capture && !confirm("更換 PDF 會清除尚未派送的截圖，確定更換？")) return;
     this.clearCapture(); this.busy = true; this.controls(); this.message("正在載入 PDF 頁面…");
     const job = ++this.sequence;
+    let nextTask, passwordRequired = false;
     try {
-      await this.destroyPdf(); if (this.destroyed || job !== this.sequence) return;
       const data = new Uint8Array(await file.arrayBuffer());
       if (this.destroyed || job !== this.sequence) return;
       const assets = `${import.meta.env.BASE_URL}pdf-assets/`;
-      this.loadingTask = pdfjs.getDocument({ data, cMapUrl: `${assets}cmaps/`, cMapPacked: true, standardFontDataUrl: `${assets}standard_fonts/`, wasmUrl: `${assets}wasm/`, iccUrl: `${assets}iccs/`, isEvalSupported: false, enableXfa: false, useSystemFonts: true });
+      this.pendingTask = nextTask = pdfjs.getDocument({ data, cMapUrl: `${assets}cmaps/`, cMapPacked: true, standardFontDataUrl: `${assets}standard_fonts/`, wasmUrl: `${assets}wasm/`, iccUrl: `${assets}iccs/`, isEvalSupported: false, enableXfa: false, useSystemFonts: true });
       // Reject encrypted input without leaving a password request or worker alive.
-      this.loadingTask.onPassword = () => { this.passwordRequired = true; this.loadingTask?.destroy(); };
-      this.pdf = await this.loadingTask.promise;
+      nextTask.onPassword = () => { passwordRequired = true; nextTask.destroy(); };
+      const nextPdf = await nextTask.promise;
       if (this.destroyed || job !== this.sequence) return;
-      if (this.pdf.numPages > PDF_LIMITS.pages) { await this.destroyPdf(); this.message("PDF 超過 200 頁，請先拆分文件。"); return; }
+      if (nextPdf.numPages > PDF_LIMITS.pages) { this.message("PDF 超過 200 頁，請先拆分文件。"); return; }
+      // Keep the existing document and its cache if the replacement is invalid.
+      await this.destroyPdf();
+      if (this.destroyed || job !== this.sequence) return;
+      this.loadingTask = nextTask; this.pdf = nextPdf; this.persisted = false;
       await this.viewer.setDocument(this.pdf);
       if (this.destroyed || job !== this.sequence) return;
       this.$("[data-count]").textContent = `／${this.pdf.numPages}`; this.$("[data-jump]").max = this.pdf.numPages; this.$("[data-jump]").value = 1;
       this.$("[data-zoom]").textContent = "100%"; this.$("[data-open]").textContent = "更換 PDF"; this.$("[data-empty]").hidden = true;
-      this.setBrowsing(true); this.message(`已載入 ${this.pdf.numPages} 頁，可上下滑動閱讀。`);
+      if (restoring) { this.viewer.restoreView(view); this.$("[data-zoom]").textContent = `${Math.round(this.viewer.zoom * 100)}%`; }
+      this.setBrowsing(true);
+      let warning = "";
+      if (this.session) {
+        try {
+          if (!restoring) await this.session.save(file, { view: this.viewer.getView(), open: this.visible });
+          this.persisted = true;
+        } catch {
+          await this.session.clear().catch(() => {});
+          warning = " 瀏覽器無法暫存此 PDF，切換功能後需重新選檔；請確認本機儲存空間與瀏覽器設定。";
+        }
+      }
+      this.message(`${restoring ? "已還原" : "已載入"} ${this.pdf.numPages} 頁，可上下滑動閱讀。${warning}`);
     } catch (error) {
       if (!this.destroyed && job === this.sequence) {
-        const password = this.passwordRequired || error.name === "PasswordException";
-        await this.destroyPdf(); this.message(password ? "此 PDF 需要密碼，目前不支援，請先解除加密。" : "此檔案不是可讀取的 PDF，請重新選擇。");
+        if (this.loadingTask === nextTask) await this.destroyPdf();
+        this.message(passwordRequired || error.name === "PasswordException" ? "此 PDF 需要密碼，目前不支援，請先解除加密。" : "此檔案不是可讀取的 PDF，請重新選擇。");
       }
-    } finally { if (job === this.sequence && !this.destroyed) { this.busy = false; this.controls(); } }
+    } finally {
+      if (nextTask !== this.loadingTask) await nextTask?.destroy().catch(() => {});
+      if (this.pendingTask === nextTask) this.pendingTask = null;
+      if (job === this.sequence && !this.destroyed) { this.busy = false; this.remember(); this.controls(); }
+    }
   }
 
   async prepareCapture({ number, region }) {
@@ -179,7 +223,9 @@ export class PdfCapturePanel {
   }
   destroy() {
     if (this.destroyed) return;
+    this.remember(); clearTimeout(this.viewTimer); document.removeEventListener("visibilitychange", this.visibilityListener);
     this.destroyed = true; this.sequence++; clearInterval(this.timer); this.stopConnection(); this.viewer.destroy();
+    this.pendingTask?.destroy().catch(() => {});
     this.editor.clear(); this.dialog.close(); this.dialog.remove();
     if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
     return this.destroyPdf();

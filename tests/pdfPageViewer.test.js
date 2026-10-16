@@ -57,6 +57,33 @@ function makeViewer(count = 20) {
 }
 
 describe("PDF 頁面繪製生命週期", () => {
+  it("隱藏造成 DOM 捲軸歸零時，重新顯示後使用保存的頁內位置及水平比例", () => {
+    const { viewer } = makeViewer(3);
+    viewer.entries.forEach((entry) => { entry.element = { style: {} }; entry.sheet.style = {}; });
+    viewer.layout = layoutPdfPages(viewer.entries.map((entry) => entry.size), 360, 2);
+    viewer.zoom = 2; viewer.list = { style: {} }; viewer.schedule = vi.fn();
+    const top = viewer.layout[1].top + 200;
+    viewer.scroller = { scrollTop: top, scrollLeft: 120, scrollWidth: 720, clientWidth: 360 };
+    const original = viewer.getView(); viewer.setVisible(false);
+    viewer.scroller.scrollTop = viewer.scroller.scrollLeft = 0;
+    expect(viewer.getView()).toEqual(original);
+    viewer.setVisible(true);
+    expect(viewer.scroller.scrollTop).toBeCloseTo(top); expect(viewer.scroller.scrollLeft).toBeCloseTo(120);
+    expect(viewer.zoom).toBe(2);
+  });
+  it("文件重載後延後到容器可見才還原縮放及頁面位置，重設時清除舊位置", () => {
+    const { viewer } = makeViewer(3);
+    viewer.entries.forEach((entry) => { entry.element = { style: {} }; entry.sheet.style = {}; });
+    viewer.list = { style: {}, replaceChildren: vi.fn() }; viewer.schedule = vi.fn();
+    viewer.scroller = { scrollTop: 0, scrollLeft: 0, scrollWidth: 720, clientWidth: 0 };
+    const restored = { zoom: 2, anchor: { number: 3, fraction: .35 }, left: .5 };
+    viewer.restoreView(restored); expect(viewer.getView()).toEqual(restored);
+    viewer.scroller.clientWidth = 360; viewer.resize();
+    const anchor = pdfScrollAnchor(viewer.layout, viewer.scroller.scrollTop);
+    expect(anchor.number).toBe(3); expect(anchor.fraction).toBeCloseTo(.35);
+    expect(viewer.scroller.scrollLeft).toBe(180);
+    viewer.reset(); expect(viewer.getView().zoom).toBe(1); expect(viewer.getView().anchor).toBeNull();
+  });
   it("捲離頁面時釋放 Canvas，持續捲動不累積全部頁面的像素", async () => {
     const { viewer, nodes } = makeViewer();
     await viewer.pump();

@@ -11,10 +11,11 @@ import { isClassroomExpired, watchClassroomExpiry } from "../utils/classroomExpi
 import { confirmAction, explainError, toast } from "../utils/ui.js";
 import { param } from "../utils/url.js";
 import { PdfSidebar } from "../pdf/PdfSidebar.js";
+import { PdfSession } from "../pdf/PdfSession.js";
 
 const $ = (id) => document.getElementById(id), classId = param("class"), histories = new Map();
 let user, classroom, engine, pages = [], pageId, pageOff, pagesOff, classOff, expiryOff, expirationRetryTimer, busy = false, stopped = false, online = false, fatal = false;
-let pdfPanel, openingPdf = false, requestedPdf = param("pdf") === "1";
+let pdfPanel, pdfSession, openingPdf = false, requestedPdf = param("pdf") === "1";
 const message = $("lectureMessage"), toolbar = $("lectureToolbar"), stage = $("lectureStage"), badge = $("syncBadge");
 const queue = new LectureWriteQueue(renderSync);
 const drawingSettings = { tool: "pen", color: "#000000" };
@@ -32,10 +33,11 @@ async function openPdfPanel() {
     const { PdfCapturePanel } = await import("../pdf/PdfCapturePanel.js");
     if (stopped || fatal) return;
     pdfPanel = new PdfCapturePanel($("lecturePdfPanel"), {
-      classId, uid: user.uid, isActive: () => Boolean(!stopped && !fatal && classroom?.admins?.[user.uid] && classroom.status === "active" && !isClassroomExpired(classroom)),
+      classId, uid: user.uid, session: pdfSession, isActive: () => Boolean(!stopped && !fatal && classroom?.admins?.[user.uid] && classroom.status === "active" && !isClassroomExpired(classroom)),
       onHide: () => { pdfSidebar.setOpen(false); $("lecturePdfToggle").focus(); }, onSuccess: ({ classroom: value }) => { classroom = value; }
     });
     pdfPanel.setVisible(pdfSidebar.open);
+    await pdfPanel.restore();
   } catch { pdfSidebar.setOpen(false); toast("PDF 工具載入失敗，請再試一次。", "error"); }
   finally { openingPdf = false; }
 }
@@ -112,6 +114,8 @@ async function init() {
     user = await ensureAnonymousUser(); classroom = await getClassroom(classId);
     if (!classroom?.admins?.[user.uid]) throw new Error("請先從課堂設定輸入六位數老師密鑰，取得本課堂權限。");
     if (isClassroomExpired(classroom)) { await expire(classroom); return; }
+    pdfSession = new PdfSession({ classId, uid: user.uid });
+    requestedPdf ||= pdfSession.state?.open === true;
     $("classTitle").textContent = `${classroom.title}｜講解白板`;
     await ensureLectureBoard(classId, user.uid);
     if (stopped) return;

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ createCaptureDispatch: vi.fn(), dispatchCapture: vi.fn() }));
-vi.mock("pdfjs-dist/legacy/build/pdf.mjs", () => ({ GlobalWorkerOptions: {} }));
+const mocks = vi.hoisted(() => ({ createCaptureDispatch: vi.fn(), dispatchCapture: vi.fn(), getDocument: vi.fn() }));
+vi.mock("pdfjs-dist/legacy/build/pdf.mjs", () => ({ GlobalWorkerOptions: {}, getDocument: mocks.getDocument }));
 vi.mock("../src/firebase/config.js", () => ({ database: {} }));
-vi.mock("../src/firebase/materialRepository.js", () => mocks);
+vi.mock("../src/firebase/materialRepository.js", () => ({ createCaptureDispatch: mocks.createCaptureDispatch, dispatchCapture: mocks.dispatchCapture }));
 import { PdfCapturePanel } from "../src/pdf/PdfCapturePanel.js";
 
 function makePanel() {
@@ -18,6 +18,45 @@ function makePanel() {
 beforeEach(() => {
   vi.clearAllMocks(); mocks.createCaptureDispatch.mockImplementation(() => ({ pageId: "page_STABLE1" }));
   mocks.dispatchCapture.mockResolvedValue({ pageId: "page_STABLE1", classroom: { boardPages: { main: { id: "main", order: 0 }, page_STABLE1: { id: "page_STABLE1", order: 1 } } } });
+});
+
+function makeLoadPanel() {
+  const panel = makePanel(), elements = new Map();
+  panel.capture = null;
+  panel.$ = (selector) => { if (!elements.has(selector)) elements.set(selector, {}); return elements.get(selector); };
+  panel.session = { save: vi.fn(async () => {}), remember: vi.fn(), clear: vi.fn(async () => {}) };
+  panel.viewer = { zoom: 1, setDocument: vi.fn(async () => {}), restoreView: vi.fn(function (view) { this.zoom = view.zoom; }), getView: () => ({ zoom: 1, anchor: null, left: 0 }) };
+  panel.destroyPdf = vi.fn(async () => { panel.pdf = panel.loadingTask = null; });
+  return panel;
+}
+
+describe("PDF 面板跨頁還原", () => {
+  const file = new File(["%PDF-source"], "test.pdf", { type: "application/pdf" });
+  it("還原已保存 PDF 與縮放位置，不重新寫入檔案；目前開啟狀態會被記住", async () => {
+    const panel = makeLoadPanel(), view = { zoom: 1.75, anchor: { number: 8, fraction: .3 }, left: .4 };
+    panel.session.state = {}; panel.session.read = vi.fn(async () => ({ file, view }));
+    mocks.getDocument.mockReturnValue({ promise: Promise.resolve({ numPages: 10 }), destroy: vi.fn(async () => {}) });
+    await panel.restore();
+    expect(panel.viewer.restoreView).toHaveBeenCalledWith(view); expect(panel.$("[data-zoom]").textContent).toBe("175%");
+    expect(panel.session.save).not.toHaveBeenCalled(); expect(panel.session.remember).toHaveBeenCalledWith(expect.objectContaining({ open: true }));
+    expect(panel.hasPending).toBe(false); expect(panel.persisted).toBe(true);
+  });
+  it("損壞或頁數超限的更換檔案不會清除原 PDF 或其暫存", async () => {
+    for (const promise of [Promise.reject(new Error("invalid")), Promise.resolve({ numPages: 201 })]) {
+      const panel = makeLoadPanel(), original = { numPages: 5 }; panel.pdf = original; panel.persisted = true;
+      const destroy = vi.fn(async () => {}); mocks.getDocument.mockReturnValue({ promise, destroy });
+      await panel.load(file);
+      expect(panel.pdf).toBe(original); expect(panel.destroyPdf).not.toHaveBeenCalled(); expect(panel.session.save).not.toHaveBeenCalled();
+      expect(destroy).toHaveBeenCalledOnce();
+    }
+  });
+  it("新文件可以閱讀但暫存失敗時顯示中文提示，並清除舊暫存避免下次還原錯誤文件", async () => {
+    const panel = makeLoadPanel(); panel.session.save.mockRejectedValueOnce(new Error("quota"));
+    mocks.getDocument.mockReturnValue({ promise: Promise.resolve({ numPages: 3 }), destroy: vi.fn(async () => {}) });
+    await panel.load(file);
+    expect(panel.pdf.numPages).toBe(3); expect(panel.persisted).toBe(false); expect(panel.session.clear).toHaveBeenCalledOnce();
+    expect(panel.message).toHaveBeenLastCalledWith(expect.stringContaining("瀏覽器無法暫存此 PDF"));
+  });
 });
 
 describe("PDF 面板派送狀態", () => {
