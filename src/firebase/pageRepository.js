@@ -2,7 +2,6 @@ import { get, onValue, ref, runTransaction, update } from "firebase/database";
 import { database } from "./config.js";
 import { randomId } from "../utils/random.js";
 import { boardPagesMap, canonicalBoardPagesMap, insertBoardPage, normalizeBoardPages } from "../whiteboard/pages.js";
-import { normalizeBackgroundPosition, normalizeBackgroundScale } from "../whiteboard/backgroundImage.js";
 
 export function watchBoardPages(token, callback, onError) {
   return onValue(ref(database, `boardPages/${token}`), (snapshot) => callback(normalizeBoardPages(snapshot.val())), onError);
@@ -52,20 +51,4 @@ export async function insertClassBoardPage(classId, classroom, students, uid, po
   await update(ref(database), changes);
   await reconcileClassBoardPages(classId);
   return { pageId, pages };
-}
-
-export async function updateClassPageCaptureLayout(classId, classroom, students, uid, pageId, scale = 1, position = null) {
-  const now = Date.now();
-  const pages = normalizeBoardPages(classroom?.boardPages);
-  const page = pages.find((item) => item.id === pageId);
-  if (!page) throw new Error("找不到要調整題目的白板頁面。");
-  if (page.backgroundImage?.type !== "rtdb-capture") throw new Error("此頁沒有可調整的 PDF 截圖教材。");
-  page.backgroundImage = { ...page.backgroundImage, scale: normalizeBackgroundScale(scale), x: normalizeBackgroundPosition(position?.x ?? page.backgroundImage.x), y: normalizeBackgroundPosition(position?.y ?? page.backgroundImage.y), updatedAt: now, updatedBy: uid };
-  const changes = {
-    [`classes/${classId}/boardPages/${pageId}/backgroundImage`]: page.backgroundImage,
-    [`classes/${classId}/updatedAt`]: now
-  };
-  for (const student of students) changes[`boardPages/${student.boardToken}/${pageId}/backgroundImage`] = page.backgroundImage;
-  await update(ref(database), changes);
-  return pages;
 }

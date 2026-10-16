@@ -116,7 +116,7 @@ async function init() {
   } catch (error) { showBlack(explainError(error)); }
 }
 
-document.querySelector("#displayBackgroundImage").addEventListener("error", () => toast("題目底圖載入失敗，請通知老師檢查分享權限。", "error"));
+document.querySelector("#displayBackgroundImage").addEventListener("error", () => toast("題目底圖載入失敗，請確認網路連線，或通知老師協助處理。", "error"));
 addEventListener("pagehide", () => { clearTimeout(clockTimer); stopServerTime(); expirationOff?.(); expirationTimerOff?.(); displayOff?.(); stopProjection(); });
 updateClock();
 init();

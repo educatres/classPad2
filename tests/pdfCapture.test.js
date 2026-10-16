@@ -38,7 +38,7 @@ describe("PDF 框選與暫存", () => {
     expect(validateCapture(capture)).toBe(capture);
     for (const changes of [{ byteLength: 262145 }, { width: 1601 }, { height: 0 }, { base64: "data:image/jpeg;base64,AAAA" }, { base64: "A=" }]) expect(() => validateCapture({ ...capture, ...changes })).toThrow();
   });
-  it("截圖參照可往返序列化，與舊 Drive 格式分流", () => {
+  it("截圖參照可往返序列化，拒絕無效參照與其他來源", () => {
     const backgroundImage = { type: "rtdb-capture", classId: "class-1", assetId: "page_ABCDEF", scale: .8, x: .4, y: .6, updatedAt: 1, updatedBy: "teacher" };
     expect(boardPagesMap(normalizeBoardPages({ page_ABCDEF: { id: "page_ABCDEF", order: 2, backgroundImage } })).page_ABCDEF.backgroundImage).toEqual(backgroundImage);
     expect(normalizeBackgroundImage({ ...backgroundImage, assetId: "main" })).toBeNull();

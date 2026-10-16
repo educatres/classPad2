@@ -47,13 +47,7 @@
               ".validate": "newData.isString()"
             },
             "backgroundImage": {
-              ".validate": "(!newData.child('type').exists() && (newData.hasChildren(['sourceUrl','imageUrl','scale','updatedAt','updatedBy']) && newData.child('sourceUrl').isString() && newData.child('sourceUrl').val().length <= 1000 && newData.child('sourceUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]/) && newData.child('imageUrl').isString() && newData.child('imageUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]thumbnail[?]id=[A-Za-z0-9_-]+&sz=w2000$/) && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128)) || (newData.hasChildren(['type','classId','assetId','scale','x','y','updatedAt','updatedBy']) && newData.child('type').val() === 'rtdb-capture' && $pageId !== 'main' && newData.child('classId').val() === $classId && newData.child('assetId').val() === $pageId && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128 && !newData.child('sourceUrl').exists() && !newData.child('imageUrl').exists())",
-              "sourceUrl": {
-                ".validate": "newData.isString()"
-              },
-              "imageUrl": {
-                ".validate": "newData.isString()"
-              },
+              ".validate": "newData.hasChildren(['type','classId','assetId','scale','x','y','updatedAt','updatedBy']) && newData.child('type').val() === 'rtdb-capture' && $pageId !== 'main' && newData.child('classId').val() === $classId && newData.child('assetId').val() === $pageId && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128 && (!data.exists() || (newData.child('scale').val() === data.child('scale').val() && newData.child('x').val() === data.child('x').val() && newData.child('y').val() === data.child('y').val()))",
               "scale": {
                 ".validate": "newData.isNumber()"
               },
@@ -202,13 +196,7 @@
             ".validate": "newData.isString()"
           },
           "backgroundImage": {
-            ".validate": "(!newData.child('type').exists() && (newData.hasChildren(['sourceUrl','imageUrl','scale','updatedAt','updatedBy']) && newData.child('sourceUrl').isString() && newData.child('sourceUrl').val().length <= 1000 && newData.child('sourceUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]/) && newData.child('imageUrl').isString() && newData.child('imageUrl').val().matches(/^https:[/][/]drive[.]google[.]com[/]thumbnail[?]id=[A-Za-z0-9_-]+&sz=w2000$/) && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128)) || (newData.hasChildren(['type','classId','assetId','scale','x','y','updatedAt','updatedBy']) && newData.child('type').val() === 'rtdb-capture' && $pageId !== 'main' && newData.child('classId').val() === root.child('boardLookup').child($boardToken).child('classId').val() && newData.child('assetId').val() === $pageId && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128 && !newData.child('sourceUrl').exists() && !newData.child('imageUrl').exists())",
-            "sourceUrl": {
-              ".validate": "newData.isString()"
-            },
-            "imageUrl": {
-              ".validate": "newData.isString()"
-            },
+            ".validate": "newData.hasChildren(['type','classId','assetId','scale','x','y','updatedAt','updatedBy']) && newData.child('type').val() === 'rtdb-capture' && $pageId !== 'main' && newData.child('classId').val() === root.child('boardLookup').child($boardToken).child('classId').val() && newData.child('assetId').val() === $pageId && newData.child('scale').isNumber() && newData.child('scale').val() >= 0.1 && newData.child('scale').val() <= 1.5 && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('updatedBy').val().length > 0 && newData.child('updatedBy').val().length <= 128 && (!data.exists() || (newData.child('scale').val() === data.child('scale').val() && newData.child('x').val() === data.child('x').val() && newData.child('y').val() === data.child('y').val()))",
             "scale": {
               ".validate": "newData.isNumber()"
             },

@@ -789,13 +789,6 @@ dialog form {
 .board-background-image[hidden] {
   display: none;
 }
-#reviewStage.moving-background {
-  cursor: grab;
-  touch-action: none;
-}
-#reviewStage.moving-background.dragging {
-  cursor: grabbing;
-}
 .board-stage canvas:not(.readonly-layer) {
   touch-action: none;
   -webkit-user-select: none;
@@ -965,17 +958,6 @@ dialog form {
   border-radius: 7px;
   background: #fff;
   color: var(--navy);
-}
-.board-toolbar label.background-scale-tool {
-  min-width: 150px;
-  grid-template-columns: 1fr auto;
-}
-.background-scale-tool input {
-  min-width: 110px;
-}
-.background-scale-tool output {
-  min-width: 42px;
-  text-align: right;
 }
 .board-message {
   padding: 1.2rem;
