@@ -1256,10 +1256,17 @@ dialog form {
   max-height: none;
   margin: 0;
   border-radius: 0;
-  padding: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.review-dialog[open] {
+  display: flex;
+  flex-direction: column;
 }
 .review-head {
-  height: 58px;
+  flex: 0 0 auto;
+  min-height: 58px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1271,16 +1278,30 @@ dialog form {
   flex: 0 0 auto;
 }
 .review-body {
-  height: calc(100dvh - 136px);
+  flex: 1;
+  min-height: 0;
   padding: 0.5rem;
   display: grid;
   place-items: center;
+  container-type: size;
+}
+.review-body .board-stage {
+  width: min(100%, calc(100cqh * 4 / 3));
 }
 .review-toolbar {
-  position: absolute;
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0.55rem 1rem;
   justify-content: flex-start;
   flex-wrap: nowrap;
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
   overflow-x: scroll;
+  -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable;
   scrollbar-width: auto;
   scrollbar-color: #6f8796 #dce5e7;
@@ -1453,9 +1474,6 @@ dialog form {
     width: 100%;
     overflow-x: auto;
     justify-content: flex-start;
-  }
-  .review-body {
-    height: calc(100dvh - 186px);
   }
 }
 @media print {

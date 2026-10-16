@@ -84,17 +84,7 @@
         </nav>
         <button id="closeReview" class="ghost">返回多格</button>
       </div>
-      <div class="review-body">
-        <div id="reviewStage" class="board-stage">
-          <canvas id="reviewBackground"></canvas>
-          <div id="reviewBackgroundLayer" class="background-image-layer"><img id="reviewBackgroundImage" class="board-background-image" alt="老師分享的題目底圖" hidden /></div>
-          <canvas id="reviewStudent"></canvas>
-          <div id="reviewTextLayer" class="student-text-layer"></div>
-          <canvas id="reviewTeacher"></canvas>
-          <div id="reviewStickyLayer" class="sticky-layer" aria-label="便條貼圖層"></div>
-        </div>
-      </div>
-      <div class="board-toolbar review-toolbar">
+      <div class="board-toolbar review-toolbar" role="toolbar" aria-label="老師批注工具">
         <button data-tool="pen" class="active">✎<span>批注筆</span></button>
         <button data-tool="eraser">⌫<span>橡皮擦</span></button>
         <div class="zoom-controls" role="group" aria-label="白板縮放">
@@ -144,6 +134,16 @@
         <button id="clearTeacher">清除批注</button>
         <button id="exportPng">下載 PNG</button>
 
+      </div>
+      <div class="review-body">
+        <div id="reviewStage" class="board-stage">
+          <canvas id="reviewBackground"></canvas>
+          <div id="reviewBackgroundLayer" class="background-image-layer"><img id="reviewBackgroundImage" class="board-background-image" alt="老師分享的題目底圖" hidden /></div>
+          <canvas id="reviewStudent"></canvas>
+          <div id="reviewTextLayer" class="student-text-layer"></div>
+          <canvas id="reviewTeacher"></canvas>
+          <div id="reviewStickyLayer" class="sticky-layer" aria-label="便條貼圖層"></div>
+        </div>
       </div>
     </dialog>
     <div id="toast" class="toast" role="status"></div>
