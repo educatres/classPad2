@@ -11,7 +11,7 @@ const databaseMocks = vi.hoisted(() => ({
 vi.mock("firebase/database", () => databaseMocks);
 vi.mock("../src/firebase/config.js", () => ({ database: {} }));
 
-import { addStudents, bindStudent } from "../src/firebase/studentRepository.js";
+import { addStudents, bindStudent, regenerateBoard, requestStudentPage } from "../src/firebase/studentRepository.js";
 
 describe("bindStudent", () => {
   beforeEach(() => {
@@ -50,6 +50,40 @@ describe("bindStudent", () => {
     await expect(binding).resolves.toBe(true);
     expect(databaseMocks.runTransaction).toHaveBeenCalledOnce();
     expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+});
+
+describe("指定學生切頁", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    databaseMocks.update.mockResolvedValue();
+    databaseMocks.get.mockResolvedValue({ val: () => null });
+  });
+
+  it("只更新指定學生，每次指定相同頁面也產生新的指令", async () => {
+    const student = { id: "student-1", boardToken: "current-board-token" };
+    await requestStudentPage(student, "page_ABCDEF");
+    await requestStudentPage(student, "page_ABCDEF");
+    const first = databaseMocks.update.mock.calls[0], second = databaseMocks.update.mock.calls[1];
+    expect(first).toEqual(["students/student-1", {
+      pageRequest: { id: expect.stringMatching(/^[A-Za-z0-9_-]{14}$/), boardToken: student.boardToken, pageId: "page_ABCDEF" },
+      updatedAt: expect.any(Number)
+    }]);
+    expect(first[1].pageRequest.id).not.toBe(second[1].pageRequest.id);
+  });
+
+  it("拒絕不完整的學生資料或非法頁面路徑", async () => {
+    await expect(requestStudentPage(null, "main")).rejects.toThrow("無法切換學生頁面");
+    await expect(requestStudentPage({ id: "student-1", boardToken: "token" }, "page_ABCDEF/studentStrokes")).rejects.toThrow("無法切換學生頁面");
+    expect(databaseMocks.update).not.toHaveBeenCalled();
+  });
+
+  it("重新產生連結時與舊白板資料一起清除舊切頁指令", async () => {
+    await regenerateBoard("class-1", { id: "student-1", boardToken: "old-token" });
+    expect(databaseMocks.update.mock.calls[1][1]).toMatchObject({
+      "students/student-1/pageRequest": null, "students/student-1/studentUid": null,
+      "boardLookup/old-token": null, "boards/old-token": null, "boardPages/old-token": null
+    });
   });
 });
 

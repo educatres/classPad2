@@ -10,6 +10,7 @@ import { BoardEngine } from "../canvas/BoardEngine.js";
 import { StickyNotesLayer } from "../notes/StickyNotesLayer.js";
 import { StudentTextLayer } from "../text/StudentTextLayer.js";
 import { normalizeBoardPages } from "../whiteboard/pages.js";
+import { createStudentPageRequestHandler } from "../whiteboard/studentPageRequest.js";
 import { clearBackgroundImage, setBackgroundViewport, showBackgroundImage } from "../whiteboard/backgroundImage.js";
 import { materialCache } from "../whiteboard/materialCache.js";
 import { setMaterialSession } from "../firebase/materialRepository.js";
@@ -32,6 +33,14 @@ let presenceDrawing = false;
 let lastActivityAt = 0, lastActivityPageId = "";
 const drawingSettings = { tool: "pen", color: "#000000", width: 5, smoothing: loadStudentSmoothing() };
 let activeMode = "pen";
+const applyPageRequest = createStudentPageRequestHandler(token, (pageId) => {
+  if (pageId !== currentPageId) {
+    engine?.finishCurrent();
+    openPage(pageId);
+  }
+  document.querySelector("#newMaterialNotice").hidden = true;
+  toast(`老師已將白板切換至第 ${pages.findIndex((page) => page.id === pageId) + 1} 頁。`);
+});
 
 function loadStudentSmoothing() {
   try { return localStorage.getItem("classpad-student-smoothing") !== "false"; }
@@ -240,6 +249,7 @@ async function init() {
       pagesLoaded = true;
       if (!pages.some((page) => page.id === currentPageId)) openPage(pages[0].id);
       else { renderPageControls(); renderBackground(); }
+      applyPageRequest(student.pageRequest, pages);
     }, () => { stopPage(); setMessage("白板權限已變更，請向老師確認連結。"); }));
     lifecycleOffs.push(watchStudent(student.id, (value) => {
       if (!value) { stopPage(); return setMessage("白板已被老師刪除。"); }
@@ -247,7 +257,8 @@ async function init() {
       const locked = value.locked || !value.enabled;
       applyInputMode();
       document.querySelector("#lockBadge").hidden = !locked;
-      if (value.studentUid !== user.uid || value.boardToken !== token || !value.enabled) { stopPage(); setMessage("此白板的裝置綁定或連結已變更，請聯絡老師。"); }
+      if (value.studentUid !== user.uid || value.boardToken !== token || !value.enabled) { stopPage(); return setMessage("此白板的裝置綁定或連結已變更，請聯絡老師。"); }
+      applyPageRequest(value.pageRequest, pages);
     }, () => { stopPage(); setMessage("白板權限已變更，請向老師確認連結。"); }));
     setSync("已同步", "synced");
   } catch (error) {

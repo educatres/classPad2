@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import { drawStudentText, hasStudentText, normalizeStudentText, wrapStudentText } from "../src/text/StudentTextLayer.js";
+import { drawStudentText, hasStudentText, normalizeStudentText, StudentTextLayer, wrapStudentText } from "../src/text/StudentTextLayer.js";
 
 describe("學生文字圖層", () => {
+  it("老師強制切頁前保存輸入法組字中的文字，平常同步仍等待組字完成", async () => {
+    const layer = Object.assign(Object.create(StudentTextLayer.prototype), {
+      editable: true, composing: true, dirty: true,
+      editor: { value: "正在輸入的答案", scrollTop: 12 },
+      lastSubmitted: { text: "", scrollTop: 0 }, onChange: vi.fn(), onError: vi.fn()
+    });
+    await layer.flush();
+    expect(layer.onChange).not.toHaveBeenCalled();
+    await layer.flush({ finishComposition: true });
+    expect(layer.onChange).toHaveBeenCalledWith({ text: "正在輸入的答案", scrollTop: 12, layoutVersion: 1 });
+    expect(layer.dirty).toBe(false);
+  });
   it("正規化純文字資料並忽略純空白作答", () => {
     expect(normalizeStudentText(null)).toEqual({ text: "", scrollTop: 0, layoutVersion: 1 });
     expect(normalizeStudentText({ text: "作答", scrollTop: 18 })).toEqual({ text: "作答", scrollTop: 18, layoutVersion: 1 });

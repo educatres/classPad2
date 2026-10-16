@@ -58,6 +58,10 @@ export async function bindStudent(studentId, uid) {
   }
 }
 export async function updateStudent(studentId, values) { await update(ref(database, `students/${studentId}`), { ...values, updatedAt: Date.now() }); }
+export async function requestStudentPage(student, pageId) {
+  if (!student?.id || !student.boardToken || !/^(main|page_[A-Za-z0-9_-]{6,48})$/.test(pageId)) throw new Error("無法切換學生頁面，請重新開啟批注模式。");
+  await updateStudent(student.id, { pageRequest: { id: randomId(14), boardToken: student.boardToken, pageId } });
+}
 export async function resetBinding(studentId) { await updateStudent(studentId, { studentUid: null }); }
 export async function regenerateBoard(classId, student) {
   const token = boardToken(); const now = Date.now();
@@ -65,7 +69,7 @@ export async function regenerateBoard(classId, student) {
   const pages = boardPagesMap(classroom.boardPages, { createdAt: classroom.createdAt || now, createdBy: Object.keys(classroom.admins || {})[0] || "system" });
   await update(ref(database), { [`boardLookup/${token}`]: { studentId: student.id, classId } });
   try {
-    await update(ref(database), { [`students/${student.id}/boardToken`]: token, [`students/${student.id}/studentUid`]: null, [`students/${student.id}/updatedAt`]: now, [`boardLookup/${student.boardToken}`]: null, [`boards/${student.boardToken}`]: null, [`boardPages/${student.boardToken}`]: null, [`activeStrokes/${student.boardToken}`]: null, [`boards/${token}/meta`]: { classId, studentId: student.id, revision: 0, updatedAt: now }, [`boardPages/${token}`]: pages });
+    await update(ref(database), { [`students/${student.id}/boardToken`]: token, [`students/${student.id}/studentUid`]: null, [`students/${student.id}/pageRequest`]: null, [`students/${student.id}/updatedAt`]: now, [`boardLookup/${student.boardToken}`]: null, [`boards/${student.boardToken}`]: null, [`boardPages/${student.boardToken}`]: null, [`activeStrokes/${student.boardToken}`]: null, [`boards/${token}/meta`]: { classId, studentId: student.id, revision: 0, updatedAt: now }, [`boardPages/${token}`]: pages });
   } catch (error) { await update(ref(database), { [`boardLookup/${token}`]: null }).catch(() => {}); throw error; }
   await reconcileClassBoardPages(classId);
   return token;

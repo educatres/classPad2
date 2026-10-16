@@ -151,9 +151,10 @@ export class StudentTextLayer {
     this.timer = setTimeout(() => this.flush(), delay);
   }
 
-  async flush() {
+  async flush({ finishComposition = false } = {}) {
     clearTimeout(this.timer);
     this.timer = null;
+    if (finishComposition) this.composing = false;
     if (!this.editable || this.composing || !this.dirty) return;
     const next = { text: this.editor.value, scrollTop: Math.max(0, Math.round(this.editor.scrollTop)), layoutVersion: 1 };
     if (next.text === this.lastSubmitted.text && next.scrollTop === this.lastSubmitted.scrollTop) { this.dirty = false; return; }
@@ -168,7 +169,7 @@ export class StudentTextLayer {
   }
 
   destroy() {
-    this.flush();
+    this.flush({ finishComposition: true });
     clearTimeout(this.timer);
     this.resizeObserver.disconnect();
     this.editor.removeEventListener("input", this.handleInput);

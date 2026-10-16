@@ -1268,13 +1268,22 @@ dialog form {
   flex: 0 0 auto;
   min-height: 58px;
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 1rem;
   border-bottom: 1px solid var(--border);
 }
-.review-head > div:first-child,
-.review-head > button:last-child {
+.review-student-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  min-width: 0;
+}
+.review-student-controls > button,
+.review-student-controls > .badge {
   flex: 0 0 auto;
 }
 .review-body {

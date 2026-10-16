@@ -1,6 +1,6 @@
 import { ensureAnonymousUser } from "../firebase/auth.js";
 import { cleanupExpiredClassroom, setStudentPinned, syncClassroomDirectory, watchClassroom } from "../firebase/classroomRepository.js";
-import { getStudents, updateStudent } from "../firebase/studentRepository.js";
+import { getStudents, requestStudentPage, updateStudent } from "../firebase/studentRepository.js";
 import { clearLayer, createStickyNote, hasAnyAnswers, markBoardActivity, removeStickyNote, removeStroke, saveStroke, subscribeLayer, subscribeStickyNotes, subscribeStudentText, updateStickyNote, watchBoardMeta } from "../firebase/boardRepository.js";
 import { insertClassBoardPage } from "../firebase/pageRepository.js";
 import { watchPresence } from "../firebase/presenceRepository.js";
@@ -256,6 +256,16 @@ smoothingButton.onclick = () => { teacherSmoothing = !teacherSmoothing; reviewEn
 renderSmoothingButton();
 document.querySelector("#reviewPrevPage").onclick = () => { const pages = classPages(), index = pages.findIndex((item) => item.id === currentReviewPageId); openReviewPage(pages[Math.max(0, index - 1)].id); };
 document.querySelector("#reviewNextPage").onclick = () => { const pages = classPages(), index = pages.findIndex((item) => item.id === currentReviewPageId); openReviewPage(pages[Math.min(pages.length - 1, index + 1)].id); };
+document.querySelector("#projectStudentPage").onclick = async (event) => {
+  if (!currentStudent || !currentReviewPageId || !reviewEngine || cleanupStarted) return;
+  const button = event.currentTarget, student = currentStudent, pageId = currentReviewPageId, number = pageNumber(pageId);
+  button.disabled = true;
+  try {
+    await requestStudentPage(student, pageId);
+    toast(`已通知 ${student.seatNumber} ${student.displayName} 切換至第 ${number} 頁；離線裝置將於恢復連線後切換。`);
+  } catch (error) { toast(explainError(error), "error"); }
+  finally { button.disabled = false; }
+};
 document.querySelector("#projectReview").onclick = () => {
   if (!currentStudent) return;
   const pageId = monitoredPage(currentStudent);

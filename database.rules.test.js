@@ -10,6 +10,72 @@ const stroke=(uid,color="#112233")=>({id:"stroke_1",tool:"pen",color,width:4,opa
 const stickyNote=(uid,overrides={})=>({id:"note_1",text:"請看這裡",color:"yellow",x:.1,y:.1,width:.3,height:.2,createdAt:2,updatedAt:2,authorUid:uid,...overrides});
 const studentText=(uid,overrides={})=>({text:"這是文字作答",scrollTop:0,layoutVersion:1,updatedAt:2,authorUid:uid,...overrides});
 
+describe("教師指定單一學生切頁的權限", () => {
+  const id = "page-request-class", sid = "page-request-student", board = "PageRequestBoardToken1234";
+  const request = { id: "request1234567", boardToken: board, pageId: "page_ABCDEF" };
+  const studentPath = `students/${sid}`, requestPath = `${studentPath}/pageRequest`;
+  let teacher, student, stranger;
+
+  beforeEach(async () => {
+    teacher = env.authenticatedContext("page-request-teacher").database();
+    student = env.authenticatedContext("page-request-device").database();
+    stranger = env.authenticatedContext("page-request-stranger").database();
+    const now = Date.now(), pages = {
+      main: { id: "main", order: 0, createdAt: now, createdBy: "page-request-teacher" },
+      page_ABCDEF: { id: "page_ABCDEF", order: 1, createdAt: now, createdBy: "page-request-teacher" }
+    };
+    await env.withSecurityRulesDisabled((context) => update(ref(context.database()), {
+      [`classes/${id}`]: { title: "切頁測試", createdAt: now, expiresAt: now + 36000000, updatedAt: now, status: "active", allowStudentWriting: true, admins: { "page-request-teacher": true }, studentCount: 1, studentOrder: { [sid]: 0 }, boardPages: pages },
+      [studentPath]: { classId: id, boardToken: board, seatNumber: "01", displayName: "學生", studentUid: "page-request-device", enabled: true, locked: false, createdAt: now, updatedAt: now },
+      [`boardLookup/${board}`]: { classId: id, studentId: sid }, [`boardPages/${board}`]: pages
+    }));
+  });
+
+  it("只有本課堂老師可指定頁面，學生只能讀取自己收到的指令", async () => {
+    await assertSucceeds(set(ref(teacher, requestPath), request));
+    expect((await assertSucceeds(get(ref(student, requestPath)))).val()).toEqual(request);
+    await assertFails(get(ref(stranger, requestPath)));
+    await assertFails(set(ref(stranger, requestPath), { ...request, pageId: "main" }));
+    await assertFails(set(ref(student, requestPath), { ...request, pageId: "main" }));
+    await assertFails(set(ref(student, requestPath), null));
+    await assertSucceeds(update(ref(teacher, studentPath), { locked: true }));
+    await assertSucceeds(set(ref(teacher, requestPath), { ...request, pageId: "main" }));
+    expect((await get(ref(student, `${studentPath}/locked`))).val()).toBe(true);
+  });
+
+  it("拒絕不存在的頁面、過期白板 Token 與額外欄位", async () => {
+    for (const value of [
+      { ...request, pageId: "page_NOTFOUND" }, { ...request, boardToken: "OldPageRequestBoard1234" },
+      { ...request, id: "" }, { ...request, id: 123 }, { ...request, extra: true },
+      { id: request.id, boardToken: board }
+    ]) await assertFails(set(ref(teacher, requestPath), value));
+  });
+
+  it("首次綁定不能夾帶新指令", async () => {
+    await env.withSecurityRulesDisabled((context) => set(ref(context.database(), `${studentPath}/studentUid`), null));
+    await assertFails(update(ref(student, studentPath), { studentUid: "page-request-device", pageRequest: request }));
+    await assertSucceeds(update(ref(student, studentPath), { studentUid: "page-request-device" }));
+  });
+
+  it("首次綁定必須保留老師先前的指令，不能修改或移除", async () => {
+    await env.withSecurityRulesDisabled((context) => set(ref(context.database(), `${studentPath}/studentUid`), null));
+    await assertSucceeds(set(ref(teacher, requestPath), request));
+    for (const value of [null, { ...request, pageId: "main" }, { ...request, id: "changed1234567" }]) {
+      await assertFails(update(ref(student, studentPath), { studentUid: "page-request-device", pageRequest: value }));
+    }
+    const record = (await get(ref(student, studentPath))).val();
+    await assertSucceeds(set(ref(student, studentPath), { ...record, studentUid: "page-request-device" }));
+    expect((await get(ref(student, requestPath))).val()).toEqual(request);
+  });
+
+  it("課程到期後禁止派送指令，老師仍可隨學生資料刪除", async () => {
+    await assertSucceeds(set(ref(teacher, requestPath), request));
+    await env.withSecurityRulesDisabled((context) => update(ref(context.database(), `classes/${id}`), { createdAt: Date.now() - 36000001, expiresAt: Date.now() - 1 }));
+    await assertFails(set(ref(teacher, requestPath), { ...request, pageId: "main" }));
+    await assertSucceeds(set(ref(teacher, studentPath), null));
+  });
+});
+
 describe("十小時期限與關聯資料", () => {
   const ttl = 36_000_000;
   let sequence = 0;

@@ -71,8 +71,10 @@
     </main>
     <dialog id="reviewDialog" class="review-dialog">
       <div class="review-head">
-        <div>
+        <div class="review-student-controls">
+          <button id="closeReview" class="ghost" type="button">返回多格</button>
           <strong id="reviewName"></strong>
+          <button id="projectStudentPage" class="primary" type="button">投影本頁到學生端</button>
           <span id="reviewPresence" class="badge"></span>
         </div>
         <nav class="review-page-controls" aria-label="學生白板頁面">
@@ -82,7 +84,6 @@
           <select id="insertPagePosition" aria-label="空白頁插入位置"></select>
           <button id="insertBlankPage" class="primary" type="button">插入空白頁</button>
         </nav>
-        <button id="closeReview" class="ghost">返回多格</button>
       </div>
       <div class="board-toolbar review-toolbar" role="toolbar" aria-label="老師批注工具">
         <button data-tool="pen" class="active">✎<span>批注筆</span></button>
