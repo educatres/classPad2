@@ -4,7 +4,8 @@ import { clearActive, markBoardActivity, publishActive, removeStroke, saveStroke
 import { setDrawing, setPresencePage, startPresence } from "../firebase/presenceRepository.js";
 import { watchBoardPages } from "../firebase/pageRepository.js";
 import { watchConnection } from "../firebase/connection.js";
-import { getClassroomExpiresAt, watchClassroomExpiresAt } from "../firebase/classroomRepository.js";
+import { getClassroomExpiresAt } from "../firebase/classroomRepository.js";
+import { watchClassroomLifetime } from "../firebase/classroomLifetime.js";
 import { BoardEngine } from "../canvas/BoardEngine.js";
 import { StickyNotesLayer } from "../notes/StickyNotesLayer.js";
 import { StudentTextLayer } from "../text/StudentTextLayer.js";
@@ -13,7 +14,7 @@ import { clearBackgroundImage, setBackgroundViewport, showBackgroundImage } from
 import { materialCache } from "../whiteboard/materialCache.js";
 import { setMaterialSession } from "../firebase/materialRepository.js";
 import { param } from "../utils/url.js";
-import { isClassroomExpired, watchClassroomExpiry } from "../utils/classroomExpiration.js";
+import { isClassroomExpired } from "../utils/classroomExpiration.js";
 import { explainError, toast } from "../utils/ui.js";
 
 const token = param("board");
@@ -22,7 +23,7 @@ const stage = document.querySelector("#boardStage");
 const toolbar = document.querySelector("#studentToolbar");
 const smoothingButton = document.querySelector("#studentSmoothing");
 const sync = document.querySelector("#syncBadge");
-let user, student, engine, stickyNotes, textLayer, presenceStop, expirationOff, expirationTimerOff, expired = false;
+let user, student, engine, stickyNotes, textLayer, presenceStop, expirationOff, expired = false;
 let pages = normalizeBoardPages();
 let currentPageId = pages[0].id;
 let pageOffs = [], lifecycleOffs = [];
@@ -107,22 +108,18 @@ function applyInputMode({ focus = false } = {}) {
 
 function expireStudent() {
   if (expired) return;
-  expired = true; expirationTimerOff?.(); stopPage(); lifecycleOffs.forEach((off) => off?.()); lifecycleOffs = []; presenceStop?.();
+  expired = true; expirationOff?.(); stopPage(); lifecycleOffs.forEach((off) => off?.()); lifecycleOffs = []; presenceStop?.();
   if (user && student) clearActive(token, "student", user.uid).catch(() => {});
   setMessage("此課程已滿 10 小時並停止使用，資料將由老師端自動清除。");
   setSync("課程已到期", "error");
 }
 
 function startExpirationWatch(classId, expiresAt) {
-  const apply = (value) => {
-    if (!value) return;
-    expirationTimerOff?.();
-    const expiration = { expiresAt: Number(value) };
-    if (isClassroomExpired(expiration)) { expireStudent(); return; }
-    expirationTimerOff = watchClassroomExpiry(expiration, { onExpire: expireStudent });
-  };
-  apply(expiresAt);
-  expirationOff = watchClassroomExpiresAt(classId, apply, () => expireStudent());
+  expirationOff?.();
+  expirationOff = watchClassroomLifetime(classId, expiresAt, {
+    onExpire: expireStudent,
+    onError: () => toast("課程期限暫時無法確認，正在重試連線。", "error")
+  });
 }
 
 function openPage(pageId, updatePresence = true) {
@@ -208,6 +205,7 @@ async function init() {
     const expiresAt = await getClassroomExpiresAt(student.classId);
     if (expiresAt && isClassroomExpired({ expiresAt })) return expireStudent();
     startExpirationWatch(student.classId, expiresAt);
+    if (expired) return;
     if (!student.enabled) return setMessage("此白板已停用，請聯絡老師。");
     if (student.studentUid && student.studentUid !== user.uid) return setMessage("此白板已綁定其他裝置，請聯絡老師解除裝置綁定。");
     if (!student.studentUid) {
@@ -215,7 +213,9 @@ async function init() {
       if (!bound) return setMessage("白板剛被其他裝置綁定，請聯絡老師。");
       student.studentUid = user.uid;
     }
+    if (expired) return;
     await setMaterialSession(student.classId, user.uid, student.id, token);
+    if (expired) return;
 
     document.querySelector("#studentName").textContent = student.displayName;
     document.querySelector("#seatNumber").textContent = ` ${student.seatNumber}`;
@@ -226,6 +226,7 @@ async function init() {
     openPage(currentPageId, false);
     try { presenceStop = await startPresence(student.classId, student.id, user.uid, currentPageId); }
     catch (error) { toast("白板已開啟，但在線狀態暫時無法同步。", "error"); console.error(error); }
+    if (expired) { presenceStop?.(); presenceStop = null; return; }
     let pagesLoaded = false;
     lifecycleOffs.push(watchBoardPages(token, (value) => {
       const previous = new Set(pages.map((page) => page.id));
@@ -250,6 +251,7 @@ async function init() {
     }, () => { stopPage(); setMessage("白板權限已變更，請向老師確認連結。"); }));
     setSync("已同步", "synced");
   } catch (error) {
+    if (expired) return;
     setMessage(explainError(error, "student"));
     setSync("開啟失敗", "error");
   }
@@ -283,7 +285,7 @@ function bindToolbar() {
 
 addEventListener("pagehide", () => {
   clearTimeout(activeTimer);
-  expirationOff?.(); expirationTimerOff?.();
+  expirationOff?.();
   stopPage();
   materialCache.clear(student?.classId);
   lifecycleOffs.forEach((off) => off?.());

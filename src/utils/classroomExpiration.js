@@ -35,9 +35,11 @@ export function watchClassroomExpiry(classroom, { onTick, onExpire } = {}) {
   let stopped = false, timer;
   const check = () => {
     if (stopped) return;
+    const expiresAt = classroomExpiresAt(classroom);
+    if (!Number.isFinite(expiresAt) || expiresAt <= 0) return;
     const now = serverNow();
     onTick?.(formatClassroomRemaining(classroom, now));
-    const remaining = classroomExpiresAt(classroom) - now;
+    const remaining = expiresAt - now;
     if (remaining <= 0) { stopped = true; onExpire?.(); return; }
     timer = setTimeout(check, Math.min(remaining, 60_000 - (now % 60_000) + 50));
   };

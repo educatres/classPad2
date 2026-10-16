@@ -1,7 +1,8 @@
 import { ensureAnonymousUser } from "../firebase/auth.js";
 import { subscribeLayer, subscribeStickyNotes, subscribeStudentText } from "../firebase/boardRepository.js";
 import { clearDisplaySession, setDisplaySession, watchDisplay } from "../firebase/displayRepository.js";
-import { getClassroomExpiresAt, watchClassroomExpiresAt } from "../firebase/classroomRepository.js";
+import { getClassroomExpiresAt } from "../firebase/classroomRepository.js";
+import { watchClassroomLifetime } from "../firebase/classroomLifetime.js";
 import { watchServerTimeOffset } from "../firebase/connection.js";
 import { watchBoardPages } from "../firebase/pageRepository.js";
 import { BoardEngine } from "../canvas/BoardEngine.js";
@@ -11,11 +12,10 @@ import { clearBackgroundImage, setBackgroundViewport, showBackgroundImage } from
 import { materialCache } from "../whiteboard/materialCache.js";
 import { normalizeBoardPages } from "../whiteboard/pages.js";
 import { param } from "../utils/url.js";
-import { isClassroomExpired, watchClassroomExpiry } from "../utils/classroomExpiration.js";
 import { explainError, toast } from "../utils/ui.js";
 
 const token = param("display"), black = document.querySelector("#displayBlack"), stage = document.querySelector("#displayStage"), message = document.querySelector("#displayMessage"), clock = document.querySelector("#displayClock");
-let user, displayOff, expirationOff, expirationTimerOff, expirationClassId, engine, stickyNotes, textLayer, clockTimer, projectionOffs = [], signature = "", expired = false;
+let user, displayOff, expirationOff, expirationClassId, engine, stickyNotes, textLayer, clockTimer, projectionOffs = [], signature = "", expired = false;
 let projectionSequence = 0;
 const stopServerTime = watchServerTimeOffset();
 
@@ -82,23 +82,17 @@ async function showProjection(state) {
 
 function expireDisplay() {
   if (expired) return;
-  expired = true; expirationTimerOff?.(); displayOff?.(); showBlack("此課程已滿 10 小時並停止使用，資料將由老師端自動清除。");
+  expired = true; expirationOff?.(); displayOff?.(); showBlack("此課程已滿 10 小時並停止使用，資料將由老師端自動清除。");
 }
 
 async function connectExpiration(classId) {
   if (expirationClassId === classId) return !expired;
-  expirationClassId = classId; expirationOff?.(); expirationTimerOff?.();
-  const apply = (value) => {
-    if (!value) return;
-    expirationTimerOff?.();
-    const expiration = { expiresAt: Number(value) };
-    if (isClassroomExpired(expiration)) { expireDisplay(); return; }
-    expirationTimerOff = watchClassroomExpiry(expiration, { onExpire: expireDisplay });
-  };
-  apply(await getClassroomExpiresAt(classId));
-  if (expired) return false;
-  expirationOff = watchClassroomExpiresAt(classId, apply, expireDisplay);
-  return true;
+  expirationClassId = classId; expirationOff?.();
+  expirationOff = watchClassroomLifetime(classId, await getClassroomExpiresAt(classId), {
+    onExpire: expireDisplay,
+    onError: () => toast("課程期限暫時無法確認，正在重試連線。", "error")
+  });
+  return !expired;
 }
 
 async function init() {
@@ -117,6 +111,6 @@ async function init() {
 }
 
 document.querySelector("#displayBackgroundImage").addEventListener("error", () => toast("題目底圖載入失敗，請確認網路連線，或通知老師協助處理。", "error"));
-addEventListener("pagehide", () => { clearTimeout(clockTimer); stopServerTime(); expirationOff?.(); expirationTimerOff?.(); displayOff?.(); stopProjection(); });
+addEventListener("pagehide", () => { clearTimeout(clockTimer); stopServerTime(); expirationOff?.(); displayOff?.(); stopProjection(); });
 updateClock();
 init();
