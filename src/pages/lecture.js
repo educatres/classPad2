@@ -9,15 +9,35 @@ import { LectureWriteQueue } from "../whiteboard/LectureWriteQueue.js";
 import { isClassroomExpired, watchClassroomExpiry } from "../utils/classroomExpiration.js";
 import { confirmAction, explainError, toast } from "../utils/ui.js";
 import { param } from "../utils/url.js";
+import { PdfSidebar } from "../pdf/PdfSidebar.js";
 
 const $ = (id) => document.getElementById(id), classId = param("class"), histories = new Map();
 let user, classroom, engine, pages = [], pageId, pageOff, pagesOff, classOff, expiryOff, expirationRetryTimer, busy = false, stopped = false, online = false, fatal = false;
+let pdfPanel, openingPdf = false, requestedPdf = param("pdf") === "1";
 const message = $("lectureMessage"), toolbar = $("lectureToolbar"), stage = $("lectureStage"), badge = $("syncBadge");
 const queue = new LectureWriteQueue(renderSync);
 const connectionOff = watchConnection($("connectionBadge"));
 const onlineOff = onValue(ref(database, ".info/connected"), (snap) => { online = snap.val() === true; renderSync(); });
 $("teacherLink").href = `./teacher.html?class=${encodeURIComponent(classId || "")}`;
 $("monitorLink").href = `./monitor.html?class=${encodeURIComponent(classId || "")}`;
+const pdfSidebar = new PdfSidebar({ workspace: $("lectureWorkspace"), panel: $("lecturePdfPanel"), splitter: $("lecturePdfSplitter"), toggle: $("lecturePdfToggle"), onVisibility: (value) => pdfPanel?.setVisible(value), onResizeStart: finishInput });
+
+async function openPdfPanel() {
+  if (openingPdf || stopped || fatal || !user) return;
+  if (pdfPanel) { pdfSidebar.setOpen(!pdfSidebar.open); return; }
+  openingPdf = true; pdfSidebar.setOpen(true);
+  try {
+    const { PdfCapturePanel } = await import("../pdf/PdfCapturePanel.js");
+    if (stopped || fatal) return;
+    pdfPanel = new PdfCapturePanel($("lecturePdfPanel"), {
+      classId, uid: user.uid, isActive: () => Boolean(!stopped && !fatal && classroom?.admins?.[user.uid] && classroom.status === "active" && !isClassroomExpired(classroom)),
+      onHide: () => { pdfSidebar.setOpen(false); $("lecturePdfToggle").focus(); }, onSuccess: ({ classroom: value }) => { classroom = value; }
+    });
+    pdfPanel.setVisible(pdfSidebar.open);
+  } catch { pdfSidebar.setOpen(false); toast("PDF 工具載入失敗，請再試一次。", "error"); }
+  finally { openingPdf = false; }
+}
+$("lecturePdfToggle").onclick = openPdfPanel;
 
 function renderSync() {
   badge.textContent = queue.error ? "同步失敗，尚未保存" : !online ? "離線" : queue.pending || busy ? "同步中" : engine ? "已同步" : "準備中";
@@ -31,6 +51,7 @@ function lectureError(error) {
 }
 function fail(error) {
   fatal = true; engine?.setEnabled(false); toolbar.hidden = true; message.hidden = false;
+  pdfPanel?.refresh();
   message.textContent = `講解白板無法使用：${lectureError(error)}${queue.pending ? " 仍有未保存內容，請保留此視窗。" : ""}`;
 }
 function finishInput() { engine?.finishCurrent(); engine?.pointers.clear(); }
@@ -65,10 +86,12 @@ function openPage(id) {
     remove: (strokeId) => { if (!queue.touches(strokeId)) current.removeStroke("teacherStrokes", strokeId); }
   }, fail);
   renderPages(); renderSync();
+  if (requestedPdf) { requestedPdf = false; openPdfPanel(); }
 }
 async function expire(value) {
   if (fatal) return;
   finishInput(); fatal = true; engine?.setEnabled(false); toolbar.hidden = true; message.hidden = false;
+  pdfPanel?.refresh();
   pageOff?.(); pagesOff?.(); expiryOff?.(); classOff?.();
   message.textContent = `課程已到期，正在清除資料。${queue.pending ? " 尚未保存的筆跡無法寫入，請保留畫面。" : ""}`;
   await cleanupExpired(value);
@@ -91,7 +114,7 @@ async function init() {
     if (stopped) return;
     classOff = watchClassroom(classId, (value) => {
       if (!value?.admins?.[user.uid]) { fail(new Error("課堂已刪除或管理權限已變更。")); return; }
-      classroom = value; expiryOff?.(); expiryOff = watchClassroomExpiry(value, { onExpire: () => expire(value) });
+      classroom = value; pdfPanel?.refresh(); expiryOff?.(); expiryOff = watchClassroomExpiry(value, { onExpire: () => expire(value) });
     }, fail);
     pagesOff = watchLecturePages(classId, (value) => {
       pages = value;
@@ -129,10 +152,10 @@ $("lectureClear").onclick = () => {
 };
 $("retrySync").onclick = () => queue.retry();
 document.querySelectorAll("a").forEach((link) => link.addEventListener("click", (event) => {
-  finishInput(); if ((queue.pending || busy) && !confirmAction("仍有內容尚未保存，離開會失去未確認的筆跡。確定離開？")) event.preventDefault();
+  finishInput(); if ((queue.pending || busy || pdfPanel?.hasPending) && !confirmAction("仍有筆跡尚未保存，或有截圖尚未派送／結果尚未確認。離開將失去本機暫存，確定離開？")) event.preventDefault();
 }));
-addEventListener("beforeunload", (event) => { finishInput(); if (queue.pending || busy) { event.preventDefault(); event.returnValue = "仍有講解內容尚未保存。"; } });
+addEventListener("beforeunload", (event) => { finishInput(); if (queue.pending || busy || pdfPanel?.hasPending) { event.preventDefault(); event.returnValue = "仍有講解內容或 PDF 派送尚未確認。"; } });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") finishInput(); });
-addEventListener("pagehide", () => { finishInput(); stopped = true; clearTimeout(expirationRetryTimer); pageOff?.(); pagesOff?.(); classOff?.(); expiryOff?.(); onlineOff(); connectionOff(); engine?.destroy(); });
+addEventListener("pagehide", () => { finishInput(); stopped = true; clearTimeout(expirationRetryTimer); pageOff?.(); pagesOff?.(); classOff?.(); expiryOff?.(); onlineOff(); connectionOff(); engine?.destroy(); pdfSidebar.destroy(); pdfPanel?.destroy(); });
 addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 init();

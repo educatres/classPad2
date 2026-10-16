@@ -1511,6 +1511,43 @@ dialog form {
 .lecture-page .board-toolbar[hidden] { display: none; }
 .lecture-page #lectureMessage { position: relative; max-width: 100%; }
 .lecture-page .board-shell:has(#lectureMessage:not([hidden])) { align-content: start; gap: .5rem; }
+.lecture-workspace { display: flex; flex: 1 1 0; min-height: 0; min-width: 0; position: relative; overflow: hidden; }
+.lecture-workspace > .board-shell { min-width: 0; }
+.pdf-panel { flex: 0 0 var(--pdf-panel-width, 35%); min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #fff; border-right: 1px solid #c3d2da; }
+.pdf-panel[hidden], .pdf-splitter[hidden] { display: none; }
+.pdf-panel-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem .7rem .3rem; }
+.pdf-panel-head h2 { margin: 0; font-size: 1.05rem; }
+.pdf-panel button { min-height: 44px; padding: .4rem .55rem; font-size: .85rem; }
+.pdf-panel-hint { margin: .3rem .7rem; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.pdf-panel-tools { flex: 0 1 auto; min-height: 44px; max-height: 42%; overflow: auto; padding: 0 .7rem .3rem; }
+.pdf-panel-tools .pdf-toolbar { gap: .35rem; margin: .3rem 0; }
+.pdf-panel-tools .pdf-panel-hint { margin: .3rem 0; }
+.pdf-page-jump { display: flex; align-items: center; gap: .3rem; font-size: .85rem; white-space: nowrap; }
+.pdf-page-jump input { width: 4.5rem; min-height: 44px; padding: .3rem; }
+.pdf-panel output { min-width: 3.5rem; text-align: center; font-variant-numeric: tabular-nums; }
+.pdf-continuous-scroll { flex: 1 1 0; min-height: 80px; position: relative; overflow: auto; background: #e6edf0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; overflow-anchor: none; }
+.pdf-pages { position: relative; min-width: 100%; }
+.pdf-page-entry { position: absolute; margin: 0; }
+.pdf-page-label { height: 28px; line-height: 28px; font-size: .8rem; color: #365467; text-align: center; }
+.pdf-page-entry .pdf-sheet { margin: 0; background: #fff; box-shadow: 0 2px 6px #173f5f25; }
+.pdf-page-entry canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pdf-page-placeholder { position: absolute; inset: 0; display: grid; place-items: center; font-size: .85rem; line-height: 1.5; color: #365467; }
+.pdf-page-placeholder[hidden] { display: none; }
+.pdf-page-placeholder:has(+ canvas) { pointer-events: none; }
+.pdf-continuous-scroll.selecting .pdf-sheet { touch-action: none; cursor: crosshair; }
+.pdf-continuous-scroll .pdf-selection { z-index: 1; }
+.pdf-empty { padding: 1rem; text-align: center; color: #365467; font-size: .9rem; line-height: 1.6; }
+.pdf-panel-footer { flex: 0 0 auto; max-height: 140px; overflow: auto; padding: .4rem .7rem; border-top: 1px solid #d8e3e8; }
+.pdf-panel-footer p { margin: 0 0 .4rem; font-size: .8rem; line-height: 1.5; }
+.pdf-panel-footer button { width: 100%; }
+.pdf-splitter { position: relative; flex: 0 0 18px; cursor: col-resize; touch-action: none; user-select: none; background: #e6edf0; }
+.pdf-splitter::after { content: ""; position: absolute; top: 50%; left: 6px; width: 6px; height: 42px; transform: translateY(-50%); border-radius: 4px; background: #7e9dad; }
+.pdf-splitter:hover, .pdf-splitter:focus-visible { background: #c5e1ef; outline: 2px solid #0376ad; outline-offset: -2px; }
+.pdf-dispatch-dialog [data-status] { min-height: 1.5em; }
+@media (max-width: 899px), (orientation: portrait) and (max-width: 1100px) {
+  .lecture-workspace.pdf-open > .pdf-panel { position: absolute; inset: 0; width: 100%; z-index: 20; border: 0; }
+  .lecture-workspace.pdf-open > .pdf-splitter { display: none; }
+}
 .monitor-summary { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin-bottom: .7rem; }
 .monitor-grid[data-size="all"] { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
 .monitor-grid[data-size="all"] .preview-head { flex-wrap: wrap; gap: .3rem; }

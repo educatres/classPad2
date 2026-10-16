@@ -8,6 +8,7 @@
     <div class="status-row"><span id="connectionBadge" class="badge">連線中</span><span id="syncBadge" class="badge" role="status" aria-live="polite">準備中</span><button id="retrySync" type="button" hidden>重試保存</button></div>
   </header>
   <div id="lectureToolbar" class="board-toolbar" role="toolbar" aria-label="老師講解工具" hidden>
+    <button id="lecturePdfToggle" class="primary" aria-expanded="false" aria-controls="lecturePdfPanel">PDF 題目派送</button>
     <button data-tool="pen" class="active" aria-pressed="true">✎ 畫筆</button><button data-tool="eraser" aria-pressed="false">⌫ 整筆橡皮擦</button>
     <input id="lectureColor" type="color" value="#173f5f" aria-label="畫筆顏色">
     <label class="brush-size-tool">筆刷<select id="lectureWidth" aria-label="畫筆粗細"><option value="1">極細</option><option value="3">細</option><option value="5" selected>中</option><option value="8">粗</option><option value="12">很粗</option><option value="20">特粗</option><option value="40">40 px</option></select></label>
@@ -15,6 +16,10 @@
     <div class="zoom-controls" role="group" aria-label="白板縮放"><button id="lectureZoomOut" aria-label="縮小白板，每次 10%">− 縮小</button><output id="lectureZoomScale">100%</output><button id="lectureZoomIn" aria-label="放大白板，每次 10%">＋ 放大</button><button id="lectureResetZoom">100%</button></div>
     <nav class="board-page-controls" aria-label="講解白板翻頁"><button id="lecturePrevPage">上一頁</button><strong id="lecturePageLabel">載入頁面…</strong><button id="lectureNextPage">下一頁</button><button id="lectureAddPage" class="primary">新增講解頁</button></nav>
   </div>
-  <main class="board-shell"><div id="lectureMessage" class="board-message" role="status">正在驗證老師權限…</div><div id="lectureStage" class="board-stage" hidden><canvas id="lectureBackground"></canvas><canvas id="lectureStudent" class="readonly-layer"></canvas><canvas id="lectureTeacher"></canvas></div></main>
+  <div id="lectureWorkspace" class="lecture-workspace">
+    <aside id="lecturePdfPanel" class="pdf-panel" aria-label="PDF 題目派送面板" hidden><p class="pdf-empty" role="status">正在載入 PDF 工具…</p></aside>
+    <div id="lecturePdfSplitter" class="pdf-splitter" role="separator" tabindex="0" aria-label="調整 PDF 面板寬度，可使用左右方向鍵" aria-orientation="vertical" aria-controls="lecturePdfPanel" hidden></div>
+    <main class="board-shell"><div id="lectureMessage" class="board-message" role="status">正在驗證老師權限…</div><div id="lectureStage" class="board-stage" hidden><canvas id="lectureBackground"></canvas><canvas id="lectureStudent" class="readonly-layer"></canvas><canvas id="lectureTeacher"></canvas></div></main>
+  </div>
   <div id="toast" class="toast" role="status"></div><script type="module" src="./src/pages/lecture.js"></script>
 </body></html>
