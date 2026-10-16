@@ -365,3 +365,66 @@ describe("Realtime Database 權限",()=>{
   it("課程到期時間建立後不可延長",async()=>{const db=env.authenticatedContext("teacher").database(),current=(await get(ref(db,`classes/${classId}/expiresAt`))).val();await assertFails(set(ref(db,`classes/${classId}/expiresAt`),current+60000));});
   it("到期後禁止修改但允許老師完整刪除",async()=>{const expiredClass="expired-class",expiredStudent="expired-student",expiredBoard="ExpiredBoardToken23456789",now=Date.now(),pages={main:{id:"main",order:0,createdAt:now,createdBy:"expired-teacher"}};await env.withSecurityRulesDisabled(async context=>update(ref(context.database()),{[`classes/${expiredClass}`]:{title:"已到期",className:"",activityName:"",createdAt:now-36000001,expiresAt:now-1,updatedAt:now-1,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:1,admins:{"expired-teacher":true},studentOrder:{[expiredStudent]:0},boardPages:pages},[`students/${expiredStudent}`]:{classId:expiredClass,boardToken:expiredBoard,seatNumber:"01",displayName:"到期學生",studentUid:"expired-student-device",enabled:true,locked:false,createdAt:now-1,updatedAt:now-1},[`boardLookup/${expiredBoard}`]:{classId:expiredClass,studentId:expiredStudent},[`boardPages/${expiredBoard}`]:pages,[`boards/${expiredBoard}/meta`]:{classId:expiredClass,studentId:expiredStudent,revision:0,updatedAt:now-1},[`userClasses/expired-teacher/${expiredClass}`]:true}));const teacherDb=env.authenticatedContext("expired-teacher").database(),studentDb=env.authenticatedContext("expired-student-device").database();await assertSucceeds(get(ref(studentDb,`classes/${expiredClass}/expiresAt`)));await assertFails(update(ref(teacherDb,`classes/${expiredClass}`),{title:"不可修改"}));await assertFails(update(ref(studentDb,`students/${expiredStudent}`),{updatedAt:now}));await assertFails(set(ref(studentDb,`boards/${expiredBoard}/studentStrokes/stroke_1`),stroke("expired-student-device")));await assertFails(set(ref(teacherDb,`boards/${expiredBoard}/teacherStrokes/stroke_1`),stroke("expired-teacher")));await assertSucceeds(update(ref(teacherDb),{[`classes/${expiredClass}`]:null,[`students/${expiredStudent}`]:null,[`boardLookup/${expiredBoard}`]:null,[`boards/${expiredBoard}`]:null,[`boardPages/${expiredBoard}`]:null,[`userClasses/expired-teacher/${expiredClass}`]:null}));});
 });
+
+
+describe("老師講解白板", () => {
+  const id = "lecture-class", base = `lectureBoards/${id}`, pid = "page_initial";
+  let teacher, student, stranger, screen;
+  const page = () => ({ id: pid, order: 0, createdAt: Date.now(), createdBy: "lecture-teacher" });
+  beforeEach(async () => {
+    teacher = env.authenticatedContext("lecture-teacher").database();
+    student = env.authenticatedContext("student").database();
+    stranger = env.authenticatedContext("other-class-teacher").database();
+    screen = env.authenticatedContext("lecture-screen").database();
+    const now = Date.now();
+    await env.withSecurityRulesDisabled((context) => update(ref(context.database()), {
+      [`classes/${id}`]: { title: "講解", createdAt: now, expiresAt: now + 36000000, admins: { "lecture-teacher": true }, status: "active" },
+      [base]: null,
+      "classes/other-class": { admins: { "other-class-teacher": true } },
+      "displaySessions/lecture-screen": { displayToken: "screen-token", boardToken: token }
+    }));
+  });
+  async function seed() {
+    await assertSucceeds(update(ref(teacher, base), { meta: { createdAt: 1, updatedAt: 1 }, [`pageIndex/${pid}`]: page() }));
+    await assertSucceeds(set(ref(teacher, `${base}/pages/${pid}/teacherStrokes/stroke_1`), stroke("lecture-teacher")));
+  }
+  it("只有本課堂老師可讀寫，學生、展示端、其他老師與未登入者均被拒絕", async () => {
+    await seed();
+    expect((await assertSucceeds(get(ref(teacher, base)))).exists()).toBe(true);
+    for (const db of [student, stranger, screen, env.unauthenticatedContext().database()]) {
+      await assertFails(get(ref(db, base)));
+      await assertFails(set(ref(db, `${base}/pages/${pid}/teacherStrokes/stroke_1`), stroke("student")));
+      await assertFails(set(ref(db, base), null));
+    }
+    await assertFails(get(ref(teacher, "lectureBoards")));
+    await assertFails(set(ref(teacher, "lectureBoards/missing/meta"), { createdAt: 1, updatedAt: 1 }));
+  });
+  it("驗證頁面存在、作者、筆畫格式與未知欄位", async () => {
+    await seed();
+    const target = ref(teacher, `${base}/pages/${pid}/teacherStrokes/stroke_1`), valid = stroke("lecture-teacher");
+    for (const invalid of [
+      { ...valid, authorUid: "student" }, { ...valid, extra: true }, { ...valid, id: "wrong" },
+      { ...valid, color: "red" }, { ...valid, width: 41 }, { ...valid, smooth: "yes" },
+      { ...valid, points: [[-0.1, 0, .5, 0]] }, { ...valid, points: [[.1, 1.1, .5, 0]] },
+      { ...valid, points: [[.1, .1, 2, 0]] }, { ...valid, points: [[.1, .1, .5, 0, "extra"]] },
+      { ...valid, points: Array.from({ length: 501 }, () => [.1, .1, .5, 0]) }
+    ]) await assertFails(set(target, invalid));
+    await assertFails(set(ref(teacher, `${base}/pages/page_missing/teacherStrokes/stroke_1`), valid));
+    await assertFails(set(ref(teacher, `${base}/pageIndex/page_newone`), { ...page(), id: "page_newone", createdBy: "student" }));
+    await assertFails(set(ref(teacher, `${base}/pageIndex/page_newone`), { ...page(), id: "page_newone", extra: true }));
+    await assertFails(set(ref(teacher, `${base}/extra`), true));
+    await assertFails(set(ref(teacher, `${base}/pages/${pid}/studentStrokes`), { stroke_1: valid }));
+    await assertSucceeds(set(target, { ...valid, smooth: true, points: Array.from({ length: 500 }, () => [.1, .1, .5, 0]) }));
+  });
+  it("十小時後禁止新增修改，但能原子刪除課堂與講解資料", async () => {
+    await seed();
+    await env.withSecurityRulesDisabled((context) => update(ref(context.database(), `classes/${id}`), { createdAt: Date.now() - 36000001, expiresAt: Date.now() + 36000000 }));
+    await assertFails(set(ref(teacher, `${base}/meta/updatedAt`), Date.now()));
+    await assertFails(set(ref(teacher, `${base}/pages/${pid}/teacherStrokes/stroke_1`), stroke("lecture-teacher")));
+    await assertFails(set(ref(teacher, `${base}/pageIndex/page_newone`), { ...page(), id: "page_newone" }));
+    await assertSucceeds(update(ref(teacher), { [`classes/${id}`]: null, [base]: null }));
+  });
+  it("沒有講解資料的舊課堂也可正常刪除", async () => {
+    await assertSucceeds(update(ref(teacher), { [`classes/${id}`]: null, [base]: null }));
+  });
+});

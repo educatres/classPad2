@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no"><title>老師講解白板｜ClassPad</title><link rel="stylesheet" href="./src/styles/app.css"></head>
+<body class="board-page lecture-page">
+  <header class="board-header lecture-header">
+    <div><strong id="classTitle">老師講解白板</strong><span class="muted">請在會議軟體分享此視窗</span></div>
+    <nav aria-label="課堂導覽"><a id="teacherLink" class="button-link" href="#">課堂設定</a><a id="monitorLink" class="button-link" href="#">學生畫面</a></nav>
+    <div class="status-row"><span id="connectionBadge" class="badge">連線中</span><span id="syncBadge" class="badge" role="status" aria-live="polite">準備中</span><button id="retrySync" type="button" hidden>重試保存</button></div>
+  </header>
+  <div id="lectureToolbar" class="board-toolbar" role="toolbar" aria-label="老師講解工具" hidden>
+    <button data-tool="pen" class="active" aria-pressed="true">✎ 畫筆</button><button data-tool="eraser" aria-pressed="false">⌫ 整筆橡皮擦</button>
+    <input id="lectureColor" type="color" value="#173f5f" aria-label="畫筆顏色">
+    <label class="brush-size-tool">筆刷<select id="lectureWidth" aria-label="畫筆粗細"><option value="1">極細</option><option value="3">細</option><option value="5" selected>中</option><option value="8">粗</option><option value="12">很粗</option><option value="20">特粗</option><option value="40">40 px</option></select></label>
+    <button id="lectureSmoothing" aria-pressed="true">平滑：開</button><button id="lectureUndo">復原</button><button id="lectureRedo">重做</button><button id="lectureClear" class="danger-outline">清除本頁</button>
+    <div class="zoom-controls" role="group" aria-label="白板縮放"><button id="lectureZoomOut" aria-label="縮小白板，每次 10%">− 縮小</button><output id="lectureZoomScale">100%</output><button id="lectureZoomIn" aria-label="放大白板，每次 10%">＋ 放大</button><button id="lectureResetZoom">100%</button></div>
+    <nav class="board-page-controls" aria-label="講解白板翻頁"><button id="lecturePrevPage">上一頁</button><strong id="lecturePageLabel">載入頁面…</strong><button id="lectureNextPage">下一頁</button><button id="lectureAddPage" class="primary">新增講解頁</button></nav>
+  </div>
+  <main class="board-shell"><div id="lectureMessage" class="board-message" role="status">正在驗證老師權限…</div><div id="lectureStage" class="board-stage" hidden><canvas id="lectureBackground"></canvas><canvas id="lectureStudent" class="readonly-layer"></canvas><canvas id="lectureTeacher"></canvas></div></main>
+  <div id="toast" class="toast" role="status"></div><script type="module" src="./src/pages/lecture.js"></script>
+</body></html>

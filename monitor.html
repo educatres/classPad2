@@ -22,6 +22,7 @@
           <button type="button" data-grid-size="6" aria-pressed="false">6 格</button>
           <button type="button" data-grid-size="8" aria-pressed="false">8 格</button>
           <button type="button" data-grid-size="12" aria-pressed="false">12 格</button>
+          <button type="button" data-grid-size="all" aria-pressed="false">全班總覽</button>
         </div>
         <input
           id="searchInput"
@@ -35,6 +36,7 @@
       </div>
       <nav class="monitor-actions" aria-label="監看工具">
         <a id="teacherLink" class="button-link" href="#">課堂設定</a>
+        <a id="lectureLink" class="button-link" href="#">講解白板</a>
         <button id="stopProjection" class="danger-outline" type="button" disabled>解除投影</button>
         <span id="connectionBadge" class="badge">連線中</span>
         <button
@@ -61,6 +63,7 @@
       ↓ 顯示工具列
     </button>
     <main class="monitor-main">
+      <div class="monitor-summary"><span id="studentSummary" role="status"></span><button id="resetFilters" class="ghost" type="button">恢復全班</button></div>
       <div id="monitorState" class="notice">正在載入學生…</div>
       <div id="monitorGrid" class="monitor-grid" data-size="4" hidden></div>
       <div class="pagination">

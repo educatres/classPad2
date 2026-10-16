@@ -9,8 +9,9 @@ export function boardLayerPath(pageId, layer) {
 
 export function subscribeLayer(token, layer, handlers, pageId = MAIN_PAGE_ID) {
   const target = ref(database, `boards/${token}/${boardLayerPath(pageId, layer)}`);
-  const offs = [onChildAdded(target, (s) => handlers.add(s.key, s.val())), onChildRemoved(target, (s) => handlers.remove(s.key))];
-  if (handlers.change) offs.push(onChildChanged(target, (s) => handlers.change(s.key, s.val())));
+  const offs = [onChildAdded(target, (s) => handlers.add(s.key, s.val()), handlers.error), onChildRemoved(target, (s) => handlers.remove(s.key), handlers.error)];
+  if (handlers.change) offs.push(onChildChanged(target, (s) => handlers.change(s.key, s.val()), handlers.error));
+  if (handlers.ready) offs.push(onValue(target, () => handlers.ready(), handlers.error, { onlyOnce: true }));
   return () => offs.forEach((off) => off());
 }
 export function watchBoardMeta(token, callback) { return onValue(ref(database, `boards/${token}/meta`), (snap) => callback(snap.val() || {})); }
@@ -34,8 +35,8 @@ export async function saveStudentText(token, value, uid, pageId = MAIN_PAGE_ID) 
   else await remove(target);
   await markBoardActivity(token, "studentText", pageId);
 }
-export function subscribeStudentText(token, callback, pageId = MAIN_PAGE_ID) {
-  return onValue(ref(database, `boards/${token}/${boardLayerPath(pageId, "studentText")}`), (snapshot) => callback(snapshot.val()));
+export function subscribeStudentText(token, callback, pageId = MAIN_PAGE_ID, onError) {
+  return onValue(ref(database, `boards/${token}/${boardLayerPath(pageId, "studentText")}`), (snapshot) => callback(snapshot.val()), onError);
 }
 export async function hasAnswers(token, pageId = MAIN_PAGE_ID) {
   const [strokes, text] = await Promise.all([

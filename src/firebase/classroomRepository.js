@@ -86,6 +86,7 @@ export async function deleteClassroom(classId, uid, classroom, students) {
   });
   changes[`classMaterials/${classId}`] = null;
   changes[`classMaterialSessions/${classId}`] = null;
+  changes[`lectureBoards/${classId}`] = null;
   await update(ref(database), changes);
 }
 export async function cleanupExpiredClassroom(classId, uid, classroom, knownStudents) {

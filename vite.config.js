@@ -37,6 +37,7 @@ export default defineConfig({
         home: "index.html",
         teacher: "teacher.html",
         monitor: "monitor.html",
+        lecture: "lecture.html",
         display: "display.html",
         student: "student.html",
         privacy: "privacy.html"

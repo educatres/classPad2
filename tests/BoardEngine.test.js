@@ -42,6 +42,15 @@ function pointerEvent(pointerId, pointerType, x, y, timeStamp = 1) {
 }
 
 describe("BoardEngine iPad 指標處理", () => {
+  it("長筆畫最多保存 500 個點，抬筆也不超出資料庫限制", () => {
+    const engine = createEngine(); engine.onComplete = vi.fn();
+    engine.pointerDown(pointerEvent(1, "pen", 0, 10));
+    const move = pointerEvent(1, "pen", 100, 10, 600);
+    move.getCoalescedEvents = () => Array.from({ length: 500 }, (_, index) => pointerEvent(1, "pen", (index + 1) / 5, 10, index + 2));
+    engine.pointerMove(move); engine.pointerUp(pointerEvent(1, "pen", 100, 20, 601));
+    expect(engine.onComplete).toHaveBeenCalledOnce();
+    expect(engine.onComplete.mock.calls[0][0].points).toHaveLength(500);
+  });
   it("Apple Pencil 書寫時忽略後續手掌觸控", () => {
     const engine = createEngine();
     engine.pointerDown(pointerEvent(1, "pen", 10, 10));

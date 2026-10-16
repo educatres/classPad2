@@ -426,6 +426,108 @@
           }
         }
       }
+    },
+    "lectureBoards": {
+      "$classId": {
+        ".read": "auth != null && root.child('classes').child($classId).child('admins').child(auth.uid).val() === true",
+        ".write": "auth != null && root.child('classes').child($classId).child('admins').child(auth.uid).val() === true && (!newData.exists() || (root.child('classes').child($classId).child('createdAt').isNumber() && root.child('classes').child($classId).child('createdAt').val() > 0 && root.child('classes').child($classId).child('createdAt').val() + 36000000 > now))",
+        "meta": {
+          ".validate": "newData.hasChildren(['createdAt','updatedAt'])",
+          "createdAt": {
+            ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())"
+          },
+          "updatedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "pageIndex": {
+          "$pageId": {
+            ".validate": "newData.hasChildren(['id','order','createdAt','createdBy']) && $pageId.matches(/^page_[A-Za-z0-9_-]{6,48}$/)",
+            "id": {
+              ".validate": "newData.val() === $pageId"
+            },
+            "order": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0"
+            },
+            "createdAt": {
+              ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())"
+            },
+            "createdBy": {
+              ".validate": "newData.isString() && ((!data.exists() && newData.val() === auth.uid) || (data.exists() && newData.val() === data.val()))"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "pages": {
+          "$pageId": {
+            ".validate": "$pageId.matches(/^page_[A-Za-z0-9_-]{6,48}$/) && newData.parent().parent().child('pageIndex').child($pageId).exists()",
+            "teacherStrokes": {
+              "$strokeId": {
+                ".validate": "!newData.exists() || (newData.hasChildren(['id','tool','color','width','opacity','points','createdAt','authorUid']) && newData.child('id').val() === $strokeId && newData.child('tool').val() === 'pen' && newData.child('color').isString() && newData.child('color').val().matches(/^#[0-9A-Fa-f]{6}$/) && newData.child('width').isNumber() && newData.child('width').val() >= 1 && newData.child('width').val() <= 40 && newData.child('opacity').isNumber() && newData.child('opacity').val() >= 0.1 && newData.child('opacity').val() <= 1 && newData.child('points').hasChildren() && newData.child('createdAt').isNumber() && newData.child('authorUid').val() === auth.uid) && $strokeId.matches(/^[A-Za-z0-9_-]{1,80}$/)",
+                "id": {
+                  ".validate": "newData.isString()"
+                },
+                "tool": {
+                  ".validate": "newData.val() === 'pen'"
+                },
+                "color": {
+                  ".validate": "newData.isString()"
+                },
+                "width": {
+                  ".validate": "newData.isNumber()"
+                },
+                "opacity": {
+                  ".validate": "newData.isNumber()"
+                },
+                "smooth": {
+                  ".validate": "newData.isBoolean()"
+                },
+                "points": {
+                  ".validate": "newData.hasChildren()",
+                  "$point": {
+                    "0": {
+                      ".validate": "newData.isNumber()"
+                    },
+                    "1": {
+                      ".validate": "newData.isNumber()"
+                    },
+                    "2": {
+                      ".validate": "newData.isNumber()"
+                    },
+                    "3": {
+                      ".validate": "newData.isNumber()"
+                    },
+                    ".validate": "newData.hasChildren(['0','1','2','3']) && newData.child('0').isNumber() && newData.child('0').val() >= 0 && newData.child('0').val() <= 1 && newData.child('1').isNumber() && newData.child('1').val() >= 0 && newData.child('1').val() <= 1 && newData.child('2').isNumber() && newData.child('2').val() >= 0 && newData.child('2').val() <= 1 && newData.child('3').isNumber() && $point.matches(/^(0|[1-9][0-9]?|[1-4][0-9][0-9])$/) && newData.child('3').val() >= 0",
+                    "$other": {
+                      ".validate": false
+                    }
+                  }
+                },
+                "createdAt": {
+                  ".validate": "newData.isNumber()"
+                },
+                "authorUid": {
+                  ".validate": "newData.val() === auth.uid"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     }
   }
 }

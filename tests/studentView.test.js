@@ -4,6 +4,11 @@ import { normalizeGridSize, paginateStudents, prioritizePinned } from "../src/mo
 const students = Array.from({ length: 10 }, (_, index) => ({ id: `student-${index + 1}` }));
 
 describe("多格監看排序", () => {
+  it("全班總覽完整列出 80 人，儲存模式後仍可還原", () => {
+    const all = Array.from({ length: 80 }, (_, index) => ({ id: String(index) }));
+    expect(normalizeGridSize("all")).toBe("all");
+    expect(paginateStudents(all, 5, "all")).toEqual({ page: 0, pages: 1, students: all });
+  });
   it("支援 4、6、8、12 格並拒絕其他數量", () => {
     expect([4, 6, 8, 12].map(normalizeGridSize)).toEqual([4, 6, 8, 12]);
     expect(normalizeGridSize(5)).toBe(4);

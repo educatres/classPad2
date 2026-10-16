@@ -27,6 +27,12 @@ jobs:
           version: 11
           run_install: false
       - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Test database rules
+        run: pnpm test:rules --project demo-classpad
       - name: Test and build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}

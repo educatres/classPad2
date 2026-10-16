@@ -1,15 +1,15 @@
 import { ensureAnonymousUser } from "../firebase/auth.js";
 import { cleanupExpiredClassroom, setStudentPinned, syncClassroomDirectory, watchClassroom } from "../firebase/classroomRepository.js";
-import { getStudents, requestStudentPage, updateStudent } from "../firebase/studentRepository.js";
-import { clearLayer, createStickyNote, hasAnyAnswers, markBoardActivity, removeStickyNote, removeStroke, saveStroke, subscribeLayer, subscribeStickyNotes, subscribeStudentText, updateStickyNote, watchBoardMeta } from "../firebase/boardRepository.js";
+import { getStudents, requestStudentPage, updateStudent, watchStudent } from "../firebase/studentRepository.js";
+import { clearLayer, createStickyNote, markBoardActivity, removeStickyNote, removeStroke, saveStroke, subscribeLayer, subscribeStickyNotes, subscribeStudentText, updateStickyNote, watchBoardMeta } from "../firebase/boardRepository.js";
 import { insertClassBoardPage } from "../firebase/pageRepository.js";
 import { watchPresence } from "../firebase/presenceRepository.js";
 import { watchConnection } from "../firebase/connection.js";
 import { claimTeacherInvite } from "../firebase/teacherAccessRepository.js";
 import { ensureClassDisplay, projectDisplay, stopDisplay, updateProjectedPage, watchDisplay } from "../firebase/displayRepository.js";
-import { BoardEngine, strokePathPoints, traceStrokeSegment } from "../canvas/BoardEngine.js";
+import { BoardEngine } from "../canvas/BoardEngine.js";
 import { StickyNotesLayer } from "../notes/StickyNotesLayer.js";
-import { drawStudentText, hasStudentText, StudentTextLayer } from "../text/StudentTextLayer.js";
+import { StudentTextLayer } from "../text/StudentTextLayer.js";
 import { normalizeGridSize, paginateStudents, prioritizePinned } from "../monitor/studentView.js";
 import { boardPagesMap, normalizeBoardPages, selectMonitoredPage } from "../whiteboard/pages.js";
 import { clearBackgroundImage, setBackgroundViewport, showBackgroundImage } from "../whiteboard/backgroundImage.js";
@@ -17,6 +17,8 @@ import { param } from "../utils/url.js";
 import { isClassroomExpired, watchClassroomExpiry } from "../utils/classroomExpiration.js";
 import { confirmAction, explainError, toast } from "../utils/ui.js";
 
+import { PreviewRegistry } from "../monitor/PreviewRegistry.js";
+import { ThumbnailBoard } from "../monitor/ThumbnailBoard.js";
 import { materialCache } from "../whiteboard/materialCache.js";
 import { downloadBlob, renderPagePng } from "../teacher/classroomExporter.js";
 
@@ -24,20 +26,27 @@ const classId = param("class"), inviteToken = param("invite");
 const grid = document.querySelector("#monitorGrid"), state = document.querySelector("#monitorState"), dialog = document.querySelector("#reviewDialog");
 const monitorToolbar = document.querySelector("#monitorToolbar"), showMonitorToolbar = document.querySelector("#showMonitorToolbar"), smoothingButton = document.querySelector("#toggleSmoothing");
 let user, classroom, students = [], presence = {}, page = 0, gridSize = loadGridSize(), teacherSmoothing = loadTeacherSmoothing();
-let previewOffs = [], previewObservers = [], previewTextLayers = [], reviewOffs = [], reviewEngine, reviewStickyNotes, reviewTextLayer, reviewText, currentStudent, currentReviewPageId;
+const previews = new PreviewRegistry(), metaSubscriptions = new Map(), rosterSubscriptions = new Map();
+let reviewScroll = 0, studentLoadVersion = 0, unavailable = false;
+let reviewOffs = [], reviewEngine, reviewStickyNotes, reviewTextLayer, reviewText, currentStudent, currentReviewPageId;
 let boardMetaOffs = [], boardMetaRenderFrame, lastTeacherActivityAt = 0, lastTeacherActivityPageId = "";
 let rotateTimer, expirationRetryTimer, classOff, expiryOff, presenceOff, presenceRenderKey = "", cleanupStarted = false;
 let displayOff, watchedDisplayToken, displayState, followingPageUpdate = false, directorySignature = "";
 
-watchConnection(document.querySelector("#connectionBadge"));
+const connectionOff = watchConnection(document.querySelector("#connectionBadge"));
 document.querySelector("#reviewBackgroundImage").addEventListener("error", () => toast("題目底圖載入失敗，請確認網路連線後重試。", "error"));
+document.querySelector("#lectureLink").href = `./lecture.html?class=${encodeURIComponent(classId || "")}`;
 document.querySelector("#teacherLink").href = `./teacher.html?class=${encodeURIComponent(classId || "")}`;
 
 function loadGridSize() { try { return normalizeGridSize(localStorage.getItem(`classpad-grid-size:${classId}`)); } catch { return 4; } }
 function loadTeacherSmoothing() { try { return localStorage.getItem("classpad-teacher-smoothing") !== "false"; } catch { return true; } }
 function classPages() { return normalizeBoardPages(classroom?.boardPages); }
 function pageNumber(pageId) { const index = classPages().findIndex((item) => item.id === pageId); return index < 0 ? 1 : index + 1; }
-function monitoredPage(student) { return selectMonitoredPage(presence[student.id], classroom?.boardPages, student.boardMeta); }
+function monitoredPage(student) {
+  const id = selectMonitoredPage(presence[student.id], classroom?.boardPages, student.boardMeta);
+  if (student.answerPageId !== id) { student.answerPageId = id; student.hasAnswer = undefined; }
+  return id;
+}
 function renderSmoothingButton() { smoothingButton.classList.toggle("active", teacherSmoothing); smoothingButton.setAttribute("aria-pressed", String(teacherSmoothing)); smoothingButton.setAttribute("aria-label", teacherSmoothing ? "關閉手寫平滑" : "開啟手寫平滑"); smoothingButton.querySelector("span").textContent = `平滑：${teacherSmoothing ? "開" : "關"}`; }
 function renderProjectionControls() {
   const active = Boolean(displayState?.active);
@@ -80,78 +89,117 @@ try { setToolbarHidden(localStorage.getItem("classpad-monitor-toolbar-hidden") =
 
 function filtered() {
   const q = document.querySelector("#searchInput").value.trim().toLowerCase();
-  const matches = students.filter((student) => (!q || `${student.seatNumber} ${student.displayName}`.toLowerCase().includes(q))
+  const matches = students.filter((student) => { monitoredPage(student); return (!q || `${student.seatNumber} ${student.displayName}`.toLowerCase().includes(q))
     && (!document.querySelector("#onlineOnly").checked || presence[student.id]?.online)
-    && (!document.querySelector("#answeredOnly").checked || student.hasAnswer));
+    && (!document.querySelector("#answeredOnly").checked || student.hasAnswer !== false); });
   return prioritizePinned(matches, classroom?.pinnedStudents);
 }
 
-function drawPreview(canvas, map, hasBackground = false, overlay = false) {
-  const rect = canvas.getBoundingClientRect(), dpr = devicePixelRatio || 1;
-  if (canvas.width !== Math.round(rect.width * dpr) || canvas.height !== Math.round(rect.height * dpr)) { canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr); }
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, rect.width, rect.height); if (!overlay && !hasBackground) { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, rect.width, rect.height); }
-  for (const stroke of map.values()) {
-    const path = strokePathPoints(stroke.points || [], stroke.smooth); if (!path.length) continue;
-    ctx.strokeStyle = stroke.color; ctx.globalAlpha = stroke.opacity ?? 1; ctx.lineWidth = Math.max(1, stroke.width * .35); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); ctx.moveTo(path[0][0] * rect.width, path[0][1] * rect.height);
-    for (let i = 1; i < path.length; i++) traceStrokeSegment(ctx, path, i, rect.width, rect.height, stroke.smooth);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-}
+function clearPreviews() { previews.clear(); }
 
-function clearPreviews() { grid.querySelectorAll(".board-background-image").forEach(clearBackgroundImage); previewOffs.forEach((off) => off()); previewOffs = []; previewObservers.forEach((observer) => observer.disconnect()); previewObservers = []; previewTextLayers.forEach((layer) => layer.destroy()); previewTextLayers = []; }
+function loseAccess(text) {
+  unavailable = true; studentLoadVersion++; cancelAnimationFrame(boardMetaRenderFrame);
+  clearPreviews(); stopReviewPage(); if (dialog.open) dialog.close();
+  metaSubscriptions.forEach((off) => off()); metaSubscriptions.clear(); boardMetaOffs = [];
+  rosterSubscriptions.forEach((off) => off()); rosterSubscriptions.clear();
+  presenceOff?.(); displayOff?.(); expiryOff?.(); materialCache.clear(classId);
+  grid.hidden = true; state.hidden = false; state.textContent = text;
+}
 
 function render() {
+  if (unavailable || cleanupStarted) return;
   renderProjectionControls();
   if (dialog.open) { renderReviewPageControls(); return; }
-  clearPreviews();
   const list = filtered(), view = paginateStudents(list, page, gridSize), visible = view.students, pinned = classroom?.pinnedStudents || {};
   page = view.page; grid.dataset.size = String(gridSize);
-  document.querySelectorAll("[data-grid-size]").forEach((button) => button.setAttribute("aria-pressed", String(Number(button.dataset.gridSize) === gridSize)));
-  document.querySelector("#pageLabel").textContent = `第 ${page + 1} / ${view.pages} 頁`; document.querySelector("#prevPage").disabled = page === 0; document.querySelector("#nextPage").disabled = page >= view.pages - 1;
-  state.hidden = visible.length > 0; state.textContent = list.length ? "這一頁沒有學生。" : "沒有符合條件的學生。"; grid.hidden = !visible.length;
-  grid.innerHTML = visible.map((student) => {
-    const latestPage = monitoredPage(student);
-    student.monitoredPageId = latestPage;
-    const projecting = displayState?.active && displayState.studentId === student.id;
-    return `<article class="preview-card" data-id="${student.id}"><div class="preview-head"><strong>${escapeHtml(student.seatNumber)} ${escapeHtml(student.displayName)}</strong><span class="preview-actions"><span class="badge">第 ${pageNumber(latestPage)} 頁</span><button class="pin-button" aria-label="${pinned[student.id] ? "取消釘選" : "釘選"} ${escapeHtml(student.displayName)}" aria-pressed="${Boolean(pinned[student.id])}">${pinned[student.id] ? "📌 已釘選" : "📌 釘選"}</button><span class="badge ${presence[student.id]?.online ? "online" : "offline"}">${presence[student.id]?.online ? (presence[student.id]?.drawing ? "書寫中" : "在線") : "離線"}</span>${student.locked ? " <span class=\"badge error\">鎖定</span>" : ""}</span></div><div class="preview-board"><img class="board-background-image" alt="題目底圖" hidden><canvas class="preview-canvas preview-student-canvas"></canvas><div class="student-text-layer"></div><canvas class="preview-canvas preview-teacher-canvas"></canvas></div><button class="project-display ${projecting ? "active" : ""}">${projecting ? "投影中" : "投影"}</button><button class="enlarge primary">放大批注</button></article>`;
-  }).join("");
-  visible.forEach((student) => {
-    const card = grid.querySelector(`[data-id="${student.id}"]`), previewBoard = card.querySelector(".preview-board"), studentCanvas = card.querySelector(".preview-student-canvas"), teacherCanvas = card.querySelector(".preview-teacher-canvas"), maps = [new Map(), new Map()], monitoredPage = student.monitoredPageId;
-    const textLayer = new StudentTextLayer({ container: card.querySelector(".student-text-layer") }); previewTextLayers.push(textLayer);
-    const background = classPages().find((item) => item.id === monitoredPage)?.backgroundImage;
-    showBackgroundImage(card.querySelector(".board-background-image"), background);
-    previewBoard.classList.toggle("has-background", Boolean(background));
-    const redrawStudent = () => requestAnimationFrame(() => drawPreview(studentCanvas, maps[0], Boolean(background)));
-    const redrawTeacher = () => requestAnimationFrame(() => drawPreview(teacherCanvas, maps[1], true, true));
-    const redraw = () => { redrawStudent(); redrawTeacher(); };
-    previewOffs.push(
-      subscribeLayer(student.boardToken, "studentStrokes", { add: (id, value) => { maps[0].set(id, value); student.hasAnswer = true; redrawStudent(); }, remove: (id) => { maps[0].delete(id); redrawStudent(); } }, monitoredPage),
-      subscribeLayer(student.boardToken, "teacherStrokes", { add: (id, value) => { maps[1].set(id, value); redrawTeacher(); }, remove: (id) => { maps[1].delete(id); redrawTeacher(); } }, monitoredPage),
-      subscribeStudentText(student.boardToken, (value) => { textLayer.setValue(value); if (hasStudentText(value)) student.hasAnswer = true; }, monitoredPage)
-    );
-    card.querySelector(".enlarge").onclick = () => openReview(student, monitoredPage);
-    card.querySelector(".project-display").onclick = () => projectStudent(student, monitoredPage, true).catch((error) => toast(explainError(error), "error"));
-    card.querySelector(".pin-button").onclick = async () => {
-      const next = !Boolean(classroom.pinnedStudents?.[student.id]);
-      try { await setStudentPinned(classId, student.id, next); classroom.pinnedStudents = { ...(classroom.pinnedStudents || {}) }; if (next) classroom.pinnedStudents[student.id] = true; else delete classroom.pinnedStudents[student.id]; page = 0; render(); } catch (error) { toast(explainError(error), "error"); }
-    };
-    const observer = new ResizeObserver(redraw); observer.observe(previewBoard); previewObservers.push(observer);
-  });
+  document.querySelectorAll("[data-grid-size]").forEach((button) => button.setAttribute("aria-pressed", String(normalizeGridSize(button.dataset.gridSize) === gridSize)));
+  document.querySelector("#pageLabel").textContent = gridSize === "all" ? "全班總覽" : `第 ${page + 1} / ${view.pages} 頁`;
+  document.querySelector(".pagination").hidden = gridSize === "all";
+  document.querySelector("#prevPage").disabled = page === 0; document.querySelector("#nextPage").disabled = page >= view.pages - 1;
+  document.querySelector("#autoRotate").disabled = gridSize === "all";
+  document.querySelector("#studentSummary").textContent = `目前顯示 ${visible.length}／全班 ${students.length} 人${list.length < students.length ? "（已篩選）" : ""}`;
+  state.hidden = visible.length > 0; state.textContent = students.length ? "沒有符合條件的學生。" : "尚未加入學生，可先開啟講解白板。"; grid.hidden = !visible.length;
+  previews.reconcile(visible,
+    (student) => JSON.stringify([student.boardToken, monitoredPage(student), classPages().find((item) => item.id === monitoredPage(student))?.backgroundImage]),
+    (student) => {
+      const card = document.createElement("article"); card.className = "preview-card"; card.dataset.id = student.id;
+      card.innerHTML = '<div class="preview-head"></div><div class="preview-board"></div><button class="project-display">投影</button><button class="enlarge primary">放大批注</button>';
+      grid.append(card);
+      const currentPage = monitoredPage(student);
+      const thumbnail = new ThumbnailBoard({ container: card.querySelector(".preview-board"), token: student.boardToken, pageId: currentPage,
+        background: classPages().find((item) => item.id === currentPage)?.backgroundImage,
+        onAnswer: (hasAnswer) => { if (student.hasAnswer !== hasAnswer) { student.hasAnswer = hasAnswer; if (document.querySelector("#answeredOnly").checked) scheduleBoardMetaRender(); } },
+        onError: () => { card.dataset.error = "true"; card.title = "白板讀取失敗，請確認連線或返回課堂設定。"; }
+      });
+      card.onclick = async (event) => {
+        const current = students.find((item) => item.id === student.id); if (!current) return;
+        const button = event.target.closest("button"); if (!button) return;
+        try {
+          if (button.classList.contains("enlarge")) openReview(current, monitoredPage(current));
+          else if (button.classList.contains("project-display")) await projectStudent(current, monitoredPage(current), true);
+          else if (button.classList.contains("pin-button")) await setStudentPinned(classId, current.id, !classroom.pinnedStudents?.[current.id]);
+        } catch (error) { toast(explainError(error), "error"); }
+      };
+      return { card, thumbnail, dispose: () => { thumbnail.destroy(); card.remove(); } };
+    },
+    ({ card }, student, index) => {
+      if (grid.children[index] !== card) grid.insertBefore(card, grid.children[index] || null);
+      const status = presence[student.id]?.online ? (presence[student.id]?.drawing ? "書寫中" : "在線") : "離線";
+      const header = `<strong>${escapeHtml(student.seatNumber)} ${escapeHtml(student.displayName)}</strong><span class="preview-actions"><span class="badge">第 ${pageNumber(monitoredPage(student))} 頁</span><button class="pin-button" aria-label="${pinned[student.id] ? "取消釘選" : "釘選"} ${escapeHtml(student.displayName)}" aria-pressed="${Boolean(pinned[student.id])}">${pinned[student.id] ? "📌 已釘選" : "📌 釘選"}</button><span class="badge ${presence[student.id]?.online ? "online" : "offline"}">${status}</span>${student.locked ? '<span class="badge error">鎖定</span>' : ""}</span>`;
+      const head = card.querySelector(".preview-head"); if (head.innerHTML !== header) head.innerHTML = header;
+      const projecting = displayState?.active && displayState.studentId === student.id;
+      const project = card.querySelector(".project-display"); project.textContent = projecting ? "投影中" : "投影"; project.classList.toggle("active", Boolean(projecting));
+    }
+  );
 }
 
-function escapeHtml(value) { const element = document.createElement("div"); element.textContent = value; return element.innerHTML; }
+function escapeHtml(value) { const element = document.createElement("div"); element.textContent = value; return element.innerHTML.replaceAll('"', "&quot;").replaceAll("'", "&#39;"); }
 function scheduleBoardMetaRender() {
   if (boardMetaRenderFrame) return;
   boardMetaRenderFrame = requestAnimationFrame(() => { boardMetaRenderFrame = null; render(); syncFollowedProjection(); });
 }
+function syncMetaSubscriptions() {
+  if (unavailable || cleanupStarted) return;
+  const tokens = new Set(students.map((student) => student.boardToken));
+  for (const [token, off] of metaSubscriptions) if (!tokens.has(token)) { off(); metaSubscriptions.delete(token); }
+  for (const student of students) if (!metaSubscriptions.has(student.boardToken)) {
+    metaSubscriptions.set(student.boardToken, watchBoardMeta(student.boardToken, (value) => {
+      student.boardMeta = value;
+      if (value.lastWrittenLayer === "studentStrokes" || value.lastWrittenLayer === "studentText") student.hasAnswer = true;
+      scheduleBoardMetaRender();
+    }));
+  }
+  boardMetaOffs = [...metaSubscriptions.values()];
+}
 async function loadStudents() {
+  const version = ++studentLoadVersion;
   try {
-    boardMetaOffs.forEach((off) => off()); boardMetaOffs = [];
-    students = await getStudents(classroom); const pageIds = classPages().map((item) => item.id);
-    boardMetaOffs = students.map((student) => watchBoardMeta(student.boardToken, (value) => { student.boardMeta = value; scheduleBoardMetaRender(); }));
-    await Promise.all(students.map(async (student) => { student.hasAnswer = await hasAnyAnswers(student.boardToken, pageIds); })); render();
+    const loaded = await getStudents(classroom);
+    if (version !== studentLoadVersion || cleanupStarted || unavailable) return;
+    const previous = new Map(students.map((student) => [student.id, student]));
+    students = loaded.map((value) => {
+      const old = previous.get(value.id);
+      if (old?.boardToken === value.boardToken) { Object.assign(old, value); return old; }
+      return value;
+    });
+    const ids = new Set(students.map((student) => student.id));
+    for (const [id, off] of rosterSubscriptions) if (!ids.has(id)) { off(); rosterSubscriptions.delete(id); }
+    for (const student of students) if (!rosterSubscriptions.has(student.id)) {
+      rosterSubscriptions.set(student.id, watchStudent(student.id, (value) => {
+        if (unavailable || cleanupStarted) return;
+        const current = students.find((item) => item.id === student.id);
+        if (!current) return;
+        if (!value) { students = students.filter((item) => item.id !== student.id); if (currentStudent?.id === current.id) closeReview(); syncMetaSubscriptions(); scheduleBoardMetaRender(); return; }
+        const regenerated = current.boardToken !== value.boardToken;
+        if (regenerated) {
+          current.boardMeta = {}; current.hasAnswer = false;
+        }
+        Object.assign(current, value);
+        if (regenerated && currentStudent?.id === current.id) { closeReview(); toast("學生網址已重建，請重新開啟批注。", "error"); }
+        syncMetaSubscriptions(); scheduleBoardMetaRender();
+      }, () => { state.hidden = false; state.textContent = "學生資料讀取失敗，請確認網路或課堂權限。"; }));
+    }
+    syncMetaSubscriptions(); render();
   } catch (error) { state.textContent = explainError(error); }
 }
 
@@ -159,7 +207,7 @@ async function expireMonitor(value) {
   materialCache.clear(classId);
   if (cleanupStarted) return;
   cleanupStarted = true; expiryOff?.(); classOff?.(); presenceOff?.(); displayOff?.(); clearPreviews(); stopReviewPage();
-  boardMetaOffs.forEach((off) => off()); boardMetaOffs = []; grid.hidden = true; monitorToolbar.hidden = true; state.hidden = false; state.textContent = "課程已到期，正在自動清除資料…";
+  boardMetaOffs.forEach((off) => off()); boardMetaOffs = []; metaSubscriptions.clear(); rosterSubscriptions.forEach((off) => off()); rosterSubscriptions.clear(); grid.hidden = true; monitorToolbar.hidden = true; state.hidden = false; state.textContent = "課程已到期，正在自動清除資料…";
   try {
     const deleted = await cleanupExpiredClassroom(classId, user.uid, value);
     state.textContent = deleted ? "課程已到期，資料已自動清除。" : "課程已到期；此展示用課程受保護，資料已保留。";
@@ -173,14 +221,14 @@ async function init() {
     user = await ensureAnonymousUser();
     if (inviteToken) { state.textContent = "正在授權這台裝置…"; await claimTeacherInvite(classId, inviteToken, user.uid); const cleanUrl = new URL(location.href); cleanUrl.searchParams.delete("invite"); history.replaceState(null, "", cleanUrl); toast("這台裝置已取得老師權限。"); }
     classOff = watchClassroom(classId, (value) => {
-      if (!value) { clearPreviews(); stopReviewPage(); materialCache.clear(classId); grid.hidden = true; state.hidden = false; state.textContent = "課堂不存在或權限不足。"; return; }
+      if (!value) { loseAccess("課堂不存在或權限不足。"); return; }
       if (isClassroomExpired(value)) { expireMonitor(value); return; }
       const nextDirectorySignature = JSON.stringify([value.title, value.className, value.createdAt, value.expiresAt, value.updatedAt, value.status, value.studentCount]);
       if (directorySignature !== nextDirectorySignature) syncClassroomDirectory(classId, value).then(() => { directorySignature = nextDirectorySignature; }).catch((error) => toast(`系統課程清單同步失敗：${explainError(error)}`, "error"));
-      const previousOrder = JSON.stringify(classroom?.studentOrder || {}); classroom = value; document.querySelector("#classTitle").textContent = value.title; connectDisplay(value.displayToken);
+      const previousOrder = JSON.stringify([classroom?.studentOrder, classroom?.updatedAt]); classroom = value; document.querySelector("#classTitle").textContent = value.title; connectDisplay(value.displayToken);
       expiryOff?.(); expiryOff = watchClassroomExpiry(value, { onExpire: () => expireMonitor(value) });
-      if (!students.length || previousOrder !== JSON.stringify(value.studentOrder || {})) loadStudents(); else render();
-    }, () => { clearPreviews(); stopReviewPage(); materialCache.clear(classId); grid.hidden = true; state.hidden = false; state.textContent = "課堂管理權限已變更。"; });
+      if (!students.length || previousOrder !== JSON.stringify([value.studentOrder, value.updatedAt])) loadStudents(); else render();
+    }, () => loseAccess("課堂管理權限已變更。"));
     presenceOff = watchPresence(classId, (value) => {
       presence = value;
       const nextKey = JSON.stringify(Object.entries(value).map(([studentId, item]) => [studentId, item.online, item.drawing, item.currentPageId, item.lastWrittenPageId, item.lastWrittenAt]));
@@ -194,6 +242,8 @@ function stopReviewPage() { clearBackgroundImage(document.querySelector("#review
 
 function renderReviewPageControls() {
   if (!currentStudent) return;
+  document.querySelector("#toggleLock").textContent = currentStudent.locked ? "解鎖白板" : "鎖定白板";
+  document.querySelector("#reviewPresence").textContent = presence[currentStudent.id]?.online ? (presence[currentStudent.id]?.drawing ? "書寫中" : "在線") : "離線";
   const pages = classPages(); let index = pages.findIndex((item) => item.id === currentReviewPageId);
   if (index < 0) { index = 0; currentReviewPageId = pages[0].id; }
   document.querySelector("#reviewPageLabel").textContent = `第 ${index + 1} / ${pages.length} 頁`;
@@ -242,10 +292,10 @@ function openReviewPage(pageId) {
 }
 
 async function openReview(student, pageId) {
-  currentStudent = student; clearPreviews(); document.querySelector("#reviewName").textContent = `${student.seatNumber} ${student.displayName}`; document.querySelector("#reviewPresence").textContent = presence[student.id]?.online ? "在線" : "離線"; document.querySelector("#toggleLock").textContent = student.locked ? "解鎖白板" : "鎖定白板"; dialog.showModal(); openReviewPage(pageId);
+  reviewScroll = window.scrollY; currentStudent = student; clearPreviews(); document.querySelector("#reviewName").textContent = `${student.seatNumber} ${student.displayName}`; document.querySelector("#reviewPresence").textContent = presence[student.id]?.online ? "在線" : "離線"; document.querySelector("#toggleLock").textContent = student.locked ? "解鎖白板" : "鎖定白板"; dialog.showModal(); openReviewPage(pageId);
 }
 
-function closeReview() { stopReviewPage(); currentStudent = null; currentReviewPageId = null; dialog.close(); render(); }
+function closeReview() { stopReviewPage(); currentStudent = null; currentReviewPageId = null; dialog.close(); render(); requestAnimationFrame(() => window.scrollTo(0, reviewScroll)); }
 document.querySelector("#closeReview").onclick = closeReview;
 dialog.addEventListener("cancel", (event) => { event.preventDefault(); closeReview(); });
 dialog.querySelectorAll("button[data-tool]").forEach((button) => button.onclick = () => { dialog.querySelectorAll("button[data-tool]").forEach((item) => item.classList.remove("active")); button.classList.add("active"); reviewEngine?.setTool(button.dataset.tool); });
@@ -280,7 +330,12 @@ document.querySelector("#insertBlankPage").onclick = async (event) => {
   try { const result = await insertClassBoardPage(classId, classroom, students, user.uid, Number(document.querySelector("#insertPagePosition").value)); classroom.boardPages = boardPagesMap(result.pages, { createdAt: classroom.createdAt, createdBy: user.uid }); openReviewPage(result.pageId); toast(`已插入為第 ${pageNumber(result.pageId)} 頁。`); } catch (error) { toast(explainError(error), "error"); } finally { button.disabled = false; }
 };
 document.querySelector("#addStickyNote").onclick = async () => { if (!currentStudent || !reviewStickyNotes) return; const offset = reviewStickyNotes.notes.size % 6; try { const id = await createStickyNote(currentStudent.boardToken, { text: "", color: document.querySelector("#stickyColor").value, x: +(.08 + offset * .04).toFixed(2), y: +(.08 + offset * .04).toFixed(2), width: .28, height: .22, authorUid: user.uid }, currentReviewPageId); reviewStickyNotes.focus(id); } catch (error) { toast(explainError(error), "error"); } };
-document.querySelector("#toggleLock").onclick = async () => { try { await updateStudent(currentStudent.id, { locked: !currentStudent.locked }); currentStudent.locked = !currentStudent.locked; document.querySelector("#toggleLock").textContent = currentStudent.locked ? "解鎖白板" : "鎖定白板"; } catch (error) { toast(explainError(error), "error"); } };
+document.querySelector("#toggleLock").onclick = async () => {
+  const student = currentStudent; if (!student) return;
+  const locked = !student.locked;
+  try { await updateStudent(student.id, { locked }); student.locked = locked; renderReviewPageControls(); }
+  catch (error) { toast(explainError(error), "error"); }
+};
 document.querySelector("#clearTeacher").onclick = async () => { if (confirmAction("確定清除本頁全部老師批注？")) { await clearLayer(currentStudent.boardToken, "teacherStrokes", currentReviewPageId); reviewEngine?.clearLayerLocal("teacherStrokes"); } };
 document.querySelector("#exportPng").onclick = async (event) => {
   if (!reviewEngine || !currentStudent) return;
@@ -292,9 +347,11 @@ document.querySelector("#exportPng").onclick = async (event) => {
 };
 
 for (const id of ["searchInput", "onlineOnly", "answeredOnly"]) document.querySelector(`#${id}`).addEventListener(id === "searchInput" ? "input" : "change", () => { page = 0; render(); });
-document.querySelectorAll("[data-grid-size]").forEach((button) => button.onclick = () => { gridSize = normalizeGridSize(button.dataset.gridSize); page = 0; try { localStorage.setItem(`classpad-grid-size:${classId}`, String(gridSize)); } catch {} render(); });
+document.querySelectorAll("[data-grid-size]").forEach((button) => button.onclick = () => { gridSize = normalizeGridSize(button.dataset.gridSize); page = 0; if (gridSize === "all") { clearInterval(rotateTimer); document.querySelector("#autoRotate").checked = false; } try { localStorage.setItem(`classpad-grid-size:${classId}`, String(gridSize)); } catch {} render(); });
 document.querySelector("#prevPage").onclick = () => { page--; render(); }; document.querySelector("#nextPage").onclick = () => { page++; render(); };
-document.querySelector("#autoRotate").onchange = (event) => { clearInterval(rotateTimer); if (event.target.checked) rotateTimer = setInterval(() => { const pages = Math.max(1, Math.ceil(filtered().length / gridSize)); page = (page + 1) % pages; render(); }, 10000); };
-addEventListener("pagehide", () => { materialCache.clear(classId); clearPreviews(); boardMetaOffs.forEach((off) => off()); expiryOff?.(); classOff?.(); presenceOff?.(); displayOff?.(); stopReviewPage(); clearInterval(rotateTimer); clearTimeout(expirationRetryTimer); });
+document.querySelector("#autoRotate").onchange = (event) => { clearInterval(rotateTimer); if (event.target.checked && gridSize !== "all") rotateTimer = setInterval(() => { const pages = Math.max(1, Math.ceil(filtered().length / gridSize)); if (gridSize !== "all") { page = (page + 1) % pages; render(); } }, 10000); };
+document.querySelector("#resetFilters").onclick = () => { document.querySelector("#searchInput").value = ""; document.querySelector("#onlineOnly").checked = false; document.querySelector("#answeredOnly").checked = false; page = 0; render(); };
+addEventListener("pagehide", () => { unavailable = true; studentLoadVersion++; cancelAnimationFrame(boardMetaRenderFrame); connectionOff(); rosterSubscriptions.forEach((off) => off()); rosterSubscriptions.clear(); materialCache.clear(classId); clearPreviews(); boardMetaOffs.forEach((off) => off()); metaSubscriptions.clear(); expiryOff?.(); classOff?.(); presenceOff?.(); displayOff?.(); stopReviewPage(); clearInterval(rotateTimer); clearTimeout(expirationRetryTimer); });
+addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 
 init();

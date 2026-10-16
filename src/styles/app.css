@@ -1503,6 +1503,23 @@ dialog form {
   }
 }
 .pdf-dialog { width: min(1100px, 96vw); max-width: 96vw; max-height: 95dvh; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); overflow: auto; }
+.lecture-header { height: auto; min-height: 62px; flex-wrap: wrap; gap: .5rem; padding: .5rem .8rem; }
+.lecture-header > div:first-child { display: grid; min-width: 0; }
+.lecture-header nav { display: flex; flex-wrap: wrap; }
+.lecture-page .board-toolbar { flex-wrap: wrap; flex: 0 0 auto; max-height: 35dvh; overflow-y: auto; }
+.lecture-page .board-page-controls { flex-wrap: wrap; }
+.lecture-page .board-toolbar[hidden] { display: none; }
+.lecture-page #lectureMessage { position: relative; max-width: 100%; }
+.lecture-page .board-shell:has(#lectureMessage:not([hidden])) { align-content: start; gap: .5rem; }
+.monitor-summary { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin-bottom: .7rem; }
+.monitor-grid[data-size="all"] { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
+.monitor-grid[data-size="all"] .preview-head { flex-wrap: wrap; gap: .3rem; }
+.monitor-grid .preview-board .preview-canvas { background: transparent; pointer-events: none; }
+.preview-card[data-error="true"] { border-color: #b42318; }
+.preview-card[data-error="true"]::after { content: "讀取失敗，請確認連線"; color: #b42318; padding: .4rem; }
+.thumbnail-loading { position: absolute; top: .4rem; left: .4rem; padding: .25rem .5rem; border-radius: 6px; background: #e7f5ff; color: var(--navy); font-size: .8rem; }
+.thumbnail-loading[hidden] { display: none; }
+.grid-size-controls { flex-wrap: wrap; }
 .pdf-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
 .pdf-toolbar button { min-height: 44px; }
 .pdf-toolbar [aria-pressed="true"] { background: #173f5f; color: #fff; }

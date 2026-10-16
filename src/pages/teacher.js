@@ -21,6 +21,7 @@ import { bindDialogClose, confirmAction, explainError, toast } from "../utils/ui
 const classId=param("class"),state=document.querySelector("#pageState"),content=document.querySelector("#teacherContent"),toolbarContent=document.querySelector("#teacherToolbarContent"),login=document.querySelector("#teacherLogin"),table=document.querySelector("#studentTable"),qrDialog=document.querySelector("#qrDialog");let user,classroom,teacherKey,classOff,expiryOff,retryTimer,accessRetries=0,students=[],directorySignature="";let loading=false,cleanupStarted=false;
 const teacherUrl=pageUrl("./teacher.html",{class:classId||""});
 bindDialogClose(qrDialog);document.querySelector("#monitorLink").href=`./monitor.html?class=${encodeURIComponent(classId||"")}`;document.querySelector("#teacherAccessUrl").value=teacherUrl;watchConnection(document.querySelector("#connectionBadge"));
+document.querySelector("#lectureLink").href = `./lecture.html?class=${encodeURIComponent(classId || "")}`;
 const studentUrl=(s)=>pageUrl("./student.html",{board:s.boardToken});
 function safe(v){const d=document.createElement("div");d.textContent=String(v??"");return d.innerHTML;}
 async function refreshStudents(){if(loading||!classroom)return;loading=true;try{students=await getStudents(classroom);renderStudents();}catch(e){toast(explainError(e),"error");}finally{loading=false;}}
