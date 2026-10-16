@@ -1,4 +1,4 @@
-export const CLASSROOM_TTL_MS = 3 * 60 * 60 * 1000;
+export const CLASSROOM_TTL_MS = 10 * 60 * 60 * 1000;
 let serverTimeOffset = 0;
 
 export function setServerTimeOffset(value) {
@@ -11,9 +11,9 @@ export function serverNow() { return Date.now() + serverTimeOffset; }
 export function classroomExpiresAt(classroom) {
   const explicit = Number(classroom?.expiresAt);
   const createdAt = Number(classroom?.createdAt);
-  const policyExpiration = Number.isFinite(createdAt) && createdAt > 0 ? createdAt + CLASSROOM_TTL_MS : 0;
-  if (Number.isFinite(explicit) && explicit > 0) return policyExpiration ? Math.min(explicit, policyExpiration) : explicit;
-  return policyExpiration;
+  // createdAt is the shared authority, including classes saved under the old policy.
+  if (Number.isFinite(createdAt) && createdAt > 0) return createdAt + CLASSROOM_TTL_MS;
+  return Number.isFinite(explicit) && explicit > 0 ? explicit : 0;
 }
 
 export function isClassroomExpired(classroom, now = serverNow()) {

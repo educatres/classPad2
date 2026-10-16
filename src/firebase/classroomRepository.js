@@ -1,7 +1,7 @@
 import { get, onValue, ref, set, update } from "firebase/database";
 import { database } from "./config.js";
 import { randomId, teacherAccessKey } from "../utils/random.js";
-import { CLASSROOM_TTL_MS, isClassroomExpired, serverNow } from "../utils/classroomExpiration.js";
+import { CLASSROOM_TTL_MS, classroomExpiresAt, isClassroomExpired, serverNow } from "../utils/classroomExpiration.js";
 import { isProtectedClassroom } from "../utils/protectedClassrooms.js";
 
 export async function createClassroom(uid, values) {
@@ -27,10 +27,19 @@ export async function listPublicClassDebugRows() {
 }
 export function publicClassroom(classroom) {
   const createdAt = Number(classroom.createdAt);
-  return { title: classroom.title, className: classroom.className || "", createdAt, expiresAt: Number(classroom.expiresAt) || createdAt + CLASSROOM_TTL_MS, updatedAt: classroom.updatedAt, status: classroom.status, studentCount: classroom.studentCount || 0 };
+  return { title: classroom.title, className: classroom.className || "", createdAt, expiresAt: classroomExpiresAt(classroom), updatedAt: classroom.updatedAt, status: classroom.status, studentCount: classroom.studentCount || 0 };
 }
 export async function syncClassroomDirectory(classId, classroom) {
-  await set(ref(database, `publicClasses/${classId}`), publicClassroom(classroom));
+  const directory = publicClassroom(classroom);
+  if (Number(classroom.expiresAt) !== directory.expiresAt) {
+    // Normalize old deadlines and the public index together; never rewrite boards.
+    await update(ref(database), {
+      [`classes/${classId}/expiresAt`]: directory.expiresAt,
+      [`publicClasses/${classId}`]: directory
+    });
+  } else {
+    await set(ref(database, `publicClasses/${classId}`), directory);
+  }
 }
 export async function syncClassroomDirectories(classrooms = []) {
   await Promise.all(classrooms.map((classroom) => syncClassroomDirectory(classroom.id, classroom)));
@@ -38,18 +47,14 @@ export async function syncClassroomDirectories(classrooms = []) {
 export async function getClassroom(classId) { return (await get(ref(database, `classes/${classId}`))).val(); }
 export async function getClassroomExpiresAt(classId) {
   const [expirationSnapshot, createdSnapshot] = await Promise.all([get(ref(database, `classes/${classId}/expiresAt`)), get(ref(database, `classes/${classId}/createdAt`))]);
-  const expiresAt = Number(expirationSnapshot.val()), createdAt = Number(createdSnapshot.val());
-  const policyExpiration = createdAt > 0 ? createdAt + CLASSROOM_TTL_MS : 0;
-  if (expiresAt > 0) return policyExpiration ? Math.min(expiresAt, policyExpiration) : expiresAt;
-  return policyExpiration || null;
+  return classroomExpiresAt({ expiresAt: expirationSnapshot.val(), createdAt: createdSnapshot.val() }) || null;
 }
 export function watchClassroom(classId, callback, onError) { return onValue(ref(database, `classes/${classId}`), (snap) => callback(snap.val()), onError); }
 export function watchClassroomExpiresAt(classId, callback, onError) {
   let expiresAt, createdAt, expirationLoaded = false, createdLoaded = false;
   const emit = () => {
     if (!expirationLoaded || !createdLoaded) return;
-    const policyExpiration = Number(createdAt) > 0 ? Number(createdAt) + CLASSROOM_TTL_MS : 0;
-    callback(Number(expiresAt) > 0 ? (policyExpiration ? Math.min(Number(expiresAt), policyExpiration) : Number(expiresAt)) : policyExpiration || null);
+    callback(classroomExpiresAt({ createdAt, expiresAt }) || null);
   };
   const stopExpiration = onValue(ref(database, `classes/${classId}/expiresAt`), (snap) => { expiresAt = snap.val(); expirationLoaded = true; emit(); }, onError);
   const stopCreated = onValue(ref(database, `classes/${classId}/createdAt`), (snap) => { createdAt = snap.val(); createdLoaded = true; emit(); }, onError);

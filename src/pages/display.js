@@ -82,7 +82,7 @@ async function showProjection(state) {
 
 function expireDisplay() {
   if (expired) return;
-  expired = true; expirationTimerOff?.(); displayOff?.(); showBlack("此課程已滿 3 小時並停止使用，資料將由老師端自動清除。");
+  expired = true; expirationTimerOff?.(); displayOff?.(); showBlack("此課程已滿 10 小時並停止使用，資料將由老師端自動清除。");
 }
 
 async function connectExpiration(classId) {

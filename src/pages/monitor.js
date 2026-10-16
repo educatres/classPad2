@@ -1,5 +1,5 @@
 import { ensureAnonymousUser } from "../firebase/auth.js";
-import { cleanupExpiredClassroom, setStudentPinned, watchClassroom } from "../firebase/classroomRepository.js";
+import { cleanupExpiredClassroom, setStudentPinned, syncClassroomDirectory, watchClassroom } from "../firebase/classroomRepository.js";
 import { getStudents, updateStudent } from "../firebase/studentRepository.js";
 import { clearLayer, createStickyNote, hasAnyAnswers, markBoardActivity, removeStickyNote, removeStroke, saveStroke, subscribeLayer, subscribeStickyNotes, subscribeStudentText, updateStickyNote, watchBoardMeta } from "../firebase/boardRepository.js";
 import { insertClassBoardPage } from "../firebase/pageRepository.js";
@@ -27,7 +27,7 @@ let user, classroom, students = [], presence = {}, page = 0, gridSize = loadGrid
 let previewOffs = [], previewObservers = [], previewTextLayers = [], reviewOffs = [], reviewEngine, reviewStickyNotes, reviewTextLayer, reviewText, currentStudent, currentReviewPageId;
 let boardMetaOffs = [], boardMetaRenderFrame, lastTeacherActivityAt = 0, lastTeacherActivityPageId = "";
 let rotateTimer, expirationRetryTimer, classOff, expiryOff, presenceOff, presenceRenderKey = "", cleanupStarted = false;
-let displayOff, watchedDisplayToken, displayState, followingPageUpdate = false;
+let displayOff, watchedDisplayToken, displayState, followingPageUpdate = false, directorySignature = "";
 
 watchConnection(document.querySelector("#connectionBadge"));
 document.querySelector("#reviewBackgroundImage").addEventListener("error", () => toast("題目底圖載入失敗，請確認網路連線後重試。", "error"));
@@ -160,7 +160,10 @@ async function expireMonitor(value) {
   if (cleanupStarted) return;
   cleanupStarted = true; expiryOff?.(); classOff?.(); presenceOff?.(); displayOff?.(); clearPreviews(); stopReviewPage();
   boardMetaOffs.forEach((off) => off()); boardMetaOffs = []; grid.hidden = true; monitorToolbar.hidden = true; state.hidden = false; state.textContent = "課程已到期，正在自動清除資料…";
-  try { await cleanupExpiredClassroom(classId, user.uid, value); state.textContent = "課程已到期，資料已自動清除。"; }
+  try {
+    const deleted = await cleanupExpiredClassroom(classId, user.uid, value);
+    state.textContent = deleted ? "課程已到期，資料已自動清除。" : "課程已到期；此展示用課程受保護，資料已保留。";
+  }
   catch (error) { cleanupStarted = false; state.textContent = `課程已到期，但自動清除失敗：${explainError(error)} 系統將自動重試。`; clearTimeout(expirationRetryTimer); expirationRetryTimer = setTimeout(() => expireMonitor(value), 15000); }
 }
 
@@ -172,6 +175,8 @@ async function init() {
     classOff = watchClassroom(classId, (value) => {
       if (!value) { clearPreviews(); stopReviewPage(); materialCache.clear(classId); grid.hidden = true; state.hidden = false; state.textContent = "課堂不存在或權限不足。"; return; }
       if (isClassroomExpired(value)) { expireMonitor(value); return; }
+      const nextDirectorySignature = JSON.stringify([value.title, value.className, value.createdAt, value.expiresAt, value.updatedAt, value.status, value.studentCount]);
+      if (directorySignature !== nextDirectorySignature) syncClassroomDirectory(classId, value).then(() => { directorySignature = nextDirectorySignature; }).catch((error) => toast(`系統課程清單同步失敗：${explainError(error)}`, "error"));
       const previousOrder = JSON.stringify(classroom?.studentOrder || {}); classroom = value; document.querySelector("#classTitle").textContent = value.title; connectDisplay(value.displayToken);
       expiryOff?.(); expiryOff = watchClassroomExpiry(value, { onExpire: () => expireMonitor(value) });
       if (!students.length || previousOrder !== JSON.stringify(value.studentOrder || {})) loadStudents(); else render();

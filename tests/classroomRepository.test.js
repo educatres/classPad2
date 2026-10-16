@@ -8,7 +8,7 @@ vi.mock("firebase/database", () => databaseMocks);
 vi.mock("../src/firebase/config.js", () => ({ database: {} }));
 vi.mock("../src/utils/random.js", () => ({ randomId: () => "class-1", teacherAccessKey: () => "123456" }));
 
-import { cleanupExpiredClassroom, createClassroom, deleteClassroom, getClassroomExpiresAt, listAllClasses, listPublicClassDebugRows, syncClassroomDirectory } from "../src/firebase/classroomRepository.js";
+import { cleanupExpiredClassroom, createClassroom, deleteClassroom, getClassroomExpiresAt, listAllClasses, listPublicClassDebugRows, syncClassroomDirectory, watchClassroomExpiresAt } from "../src/firebase/classroomRepository.js";
 import { CLASSROOM_TTL_MS, setServerTimeOffset } from "../src/utils/classroomExpiration.js";
 
 describe("課程建立與到期清理", () => {
@@ -20,7 +20,7 @@ describe("課程建立與到期清理", () => {
     databaseMocks.get.mockResolvedValue({ val: () => 0 });
   });
 
-  it("建立時寫入 3 小時後的固定到期時間", async () => {
+  it("建立時寫入 10 小時後的固定到期時間", async () => {
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     await createClassroom("teacher", { title: "數學課" });
     const classroom = databaseMocks.update.mock.calls[0][1]["classes/class-1"];
@@ -52,12 +52,39 @@ describe("課程建立與到期清理", () => {
   });
 
   it("只同步公開課程欄位", async () => {
-    const classroom = { title: "數學課", className: "六甲", activityName: "不可公開", createdAt: 1, expiresAt: 2, updatedAt: 3, status: "active", studentCount: 4, admins: { teacher: true } };
+    const classroom = { title: "數學課", className: "六甲", activityName: "不可公開", createdAt: 1, expiresAt: 1 + CLASSROOM_TTL_MS, updatedAt: 3, status: "active", studentCount: 4, admins: { teacher: true } };
     await syncClassroomDirectory("class-1", classroom);
-    expect(databaseMocks.set).toHaveBeenCalledWith("publicClasses/class-1", { title: "數學課", className: "六甲", createdAt: 1, expiresAt: 2, updatedAt: 3, status: "active", studentCount: 4 });
+    expect(databaseMocks.set).toHaveBeenCalledWith("publicClasses/class-1", { title: "數學課", className: "六甲", createdAt: 1, expiresAt: 1 + CLASSROOM_TTL_MS, updatedAt: 3, status: "active", studentCount: 4 });
   });
 
-  it("既有較長 expiresAt 仍套用 3 小時上限", async () => {
+  it("舊三小時期限與公開目錄以同一筆原子更新調整，不改動筆跡或建立時間", async () => {
+    const createdAt = Date.now() - 4 * 60 * 60 * 1000;
+    const classroom = { title: "既有課程", createdAt, expiresAt: createdAt + 3 * 60 * 60 * 1000, updatedAt: createdAt, status: "active" };
+    await expect(cleanupExpiredClassroom("class-1", "teacher", classroom)).resolves.toBe(false);
+    await syncClassroomDirectory("class-1", classroom);
+    expect(databaseMocks.update).toHaveBeenCalledExactlyOnceWith("", {
+      "classes/class-1/expiresAt": createdAt + CLASSROOM_TTL_MS,
+      "publicClasses/class-1": { title: "既有課程", className: "", createdAt, expiresAt: createdAt + CLASSROOM_TTL_MS, updatedAt: createdAt, status: "active", studentCount: 0 }
+    });
+    expect(databaseMocks.set).not.toHaveBeenCalled();
+  });
+
+  it("讀取與雙欄位監聽對舊三小時期限採用相同十小時政策，並可移除監聽", async () => {
+    const createdAt = 5_000, expiresAt = createdAt + 3 * 60 * 60 * 1000;
+    databaseMocks.get.mockResolvedValueOnce({ val: () => expiresAt }).mockResolvedValueOnce({ val: () => createdAt });
+    await expect(getClassroomExpiresAt("class-1")).resolves.toBe(createdAt + CLASSROOM_TTL_MS);
+    const callback = vi.fn(), stop = vi.fn();
+    databaseMocks.onValue.mockImplementation((path, onValue) => {
+      onValue({ val: () => path.endsWith("createdAt") ? createdAt : expiresAt });
+      return stop;
+    });
+    const unsubscribe = watchClassroomExpiresAt("class-1", callback);
+    expect(callback).toHaveBeenCalledExactlyOnceWith(createdAt + CLASSROOM_TTL_MS);
+    unsubscribe();
+    expect(stop).toHaveBeenCalledTimes(2);
+  });
+
+  it("既有較長 expiresAt 仍套用 10 小時上限", async () => {
     databaseMocks.get.mockResolvedValueOnce({ val: () => 5_000 + 48 * 60 * 60 * 1000 }).mockResolvedValueOnce({ val: () => 5_000 });
     await expect(getClassroomExpiresAt("class-1")).resolves.toBe(5_000 + CLASSROOM_TTL_MS);
   });

@@ -109,7 +109,7 @@ function expireStudent() {
   if (expired) return;
   expired = true; expirationTimerOff?.(); stopPage(); lifecycleOffs.forEach((off) => off?.()); lifecycleOffs = []; presenceStop?.();
   if (user && student) clearActive(token, "student", user.uid).catch(() => {});
-  setMessage("此課程已滿 3 小時並停止使用，資料將由老師端自動清除。");
+  setMessage("此課程已滿 10 小時並停止使用，資料將由老師端自動清除。");
   setSync("課程已到期", "error");
 }
 

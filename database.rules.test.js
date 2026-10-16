@@ -4,11 +4,91 @@ import { assertFails, assertSucceeds, initializeTestEnvironment } from "@firebas
 import { get, ref, set, update } from "firebase/database";
 
 let env;const projectId="classpad-rules-test",classId="class123",studentId="student123",token="abcdefghijklmnopqrstuvwx";
-beforeAll(async()=>{env=await initializeTestEnvironment({projectId,database:{rules:fs.readFileSync("database.rules.json","utf8"),host:"127.0.0.1",port:9000}});const now=Date.now(),pages={main:{id:"main",order:0,createdAt:1,createdBy:"teacher"},page_ABCDEF:{id:"page_ABCDEF",order:1,createdAt:2,createdBy:"teacher"}},publicClass={title:"測試",className:"",createdAt:now,expiresAt:now+10800000,updatedAt:now,status:"active",studentCount:1};await env.withSecurityRulesDisabled(async context=>set(ref(context.database()),{classes:{[classId]:{title:"測試",className:"",activityName:"",createdAt:now,expiresAt:now+10800000,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:1,admins:{teacher:true},studentOrder:{[studentId]:0},boardPages:pages}},publicClasses:{[classId]:publicClass},students:{[studentId]:{classId,boardToken:token,seatNumber:"01",displayName:"小明",studentUid:"student",enabled:true,locked:false,createdAt:1,updatedAt:1}},boardLookup:{[token]:{classId,studentId}},boardPages:{[token]:pages},boards:{[token]:{meta:{classId,studentId,revision:0,updatedAt:1}}},userClasses:{teacher:{[classId]:true}},teacherKeys:{[classId]:"123456"}}));});
+beforeAll(async()=>{env=await initializeTestEnvironment({projectId,database:{rules:fs.readFileSync("database.rules.json","utf8"),host:"127.0.0.1",port:9000}});const now=Date.now(),pages={main:{id:"main",order:0,createdAt:1,createdBy:"teacher"},page_ABCDEF:{id:"page_ABCDEF",order:1,createdAt:2,createdBy:"teacher"}},publicClass={title:"測試",className:"",createdAt:now,expiresAt:now+36000000,updatedAt:now,status:"active",studentCount:1};await env.withSecurityRulesDisabled(async context=>set(ref(context.database()),{classes:{[classId]:{title:"測試",className:"",activityName:"",createdAt:now,expiresAt:now+36000000,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:1,admins:{teacher:true},studentOrder:{[studentId]:0},boardPages:pages}},publicClasses:{[classId]:publicClass},students:{[studentId]:{classId,boardToken:token,seatNumber:"01",displayName:"小明",studentUid:"student",enabled:true,locked:false,createdAt:1,updatedAt:1}},boardLookup:{[token]:{classId,studentId}},boardPages:{[token]:pages},boards:{[token]:{meta:{classId,studentId,revision:0,updatedAt:1}}},userClasses:{teacher:{[classId]:true}},teacherKeys:{[classId]:"123456"}}));});
 afterAll(()=>env?.cleanup());
 const stroke=(uid,color="#112233")=>({id:"stroke_1",tool:"pen",color,width:4,opacity:1,points:[[.1,.1,.5,0],[.2,.2,.5,10]],createdAt:2,authorUid:uid});
 const stickyNote=(uid,overrides={})=>({id:"note_1",text:"請看這裡",color:"yellow",x:.1,y:.1,width:.3,height:.2,createdAt:2,updatedAt:2,authorUid:uid,...overrides});
 const studentText=(uid,overrides={})=>({text:"這是文字作答",scrollTop:0,layoutVersion:1,updatedAt:2,authorUid:uid,...overrides});
+
+describe("十小時期限與關聯資料", () => {
+  const ttl = 36_000_000;
+  let sequence = 0;
+  it.each([
+    ["舊三小時", 3, 4, true], ["缺到期欄位", null, 4, true], ["舊長期限", 48, 4, true],
+    ["舊三小時", 3, 11, false], ["缺到期欄位", null, 11, false], ["舊長期限", 48, 11, false]
+  ])("%s資料（舊期限 %s 小時、已經過 %s 小時）的所有路徑一致", async (_label, storedHours, ageHours, active) => {
+    const id = `ttl-linked-${++sequence}`, sid = `ttl-student-${sequence}`, board = `TtlLinkedBoardToken${String(sequence).padStart(6, "0")}`;
+    const uid = `ttl-device-${sequence}`, teacherUid = `ttl-teacher-${sequence}`, screenUid = `ttl-screen-${sequence}`, invitedUid = `ttl-invited-${sequence}`, preclaimedUid = `ttl-preclaimed-${sequence}`;
+    const display = `TtlDisplay${String(sequence).padStart(14, "0")}`, invite = `TtlInvite${String(sequence).padStart(15, "0")}`, now = Date.now(), createdAt = now - ageHours * 3_600_000;
+    const teacher = env.authenticatedContext(teacherUid).database(), student = env.authenticatedContext(uid).database(), screen = env.authenticatedContext(screenUid).database();
+    const main = { id: "main", order: 0, createdAt, createdBy: teacherUid }, pageId = "page_TTL123", page = { id: pageId, order: 1, createdAt, createdBy: teacherUid, backgroundImage: { type: "rtdb-capture", classId: id, assetId: pageId, scale: 1, x: .5, y: .5, updatedAt: now, updatedBy: teacherUid } };
+    const classroom = { title: "期限連動", className: "", createdAt, updatedAt: now, status: "active", allowStudentWriting: true, allowStudentClear: false, showTeacherAnnotations: true, studentCount: 1, admins: { [teacherUid]: true }, studentOrder: { [sid]: 0 }, displayToken: display, teacherInviteTokens: { [invite]: true }, boardPages: { main, [pageId]: page } };
+    if (storedHours !== null) classroom.expiresAt = createdAt + storedHours * 3_600_000;
+    const directory = { title: classroom.title, className: "", createdAt, expiresAt: classroom.expiresAt || createdAt + ttl, updatedAt: now, status: "active", studentCount: 1 };
+    const asset = { version: 1, mimeType: "image/jpeg", base64: "/9j/2Q==", width: 10, height: 10, byteLength: 4, createdAt: now, createdBy: teacherUid };
+    const projection = { classId: id, active: true, studentId: sid, boardToken: board, pageId, label: "期限連動", followStudent: true, updatedAt: now, updatedBy: teacherUid };
+    const session = { studentId: sid, boardToken: board };
+    await env.withSecurityRulesDisabled((context) => update(ref(context.database()), {
+      [`classes/${id}`]: classroom, [`publicClasses/${id}`]: directory,
+      [`students/${sid}`]: { classId: id, boardToken: board, seatNumber: "1", displayName: "學生", studentUid: uid, enabled: true, locked: false, createdAt, updatedAt: now },
+      [`boardLookup/${board}`]: { classId: id, studentId: sid }, [`boardPages/${board}`]: { main, [pageId]: page },
+      [`boards/${board}/meta`]: { classId: id, studentId: sid, revision: 0, updatedAt: now },
+      [`boards/${board}/studentStrokes/stroke_1`]: stroke(uid), [`teacherKeys/${id}`]: "123456",
+      [`teacherKeyClaims/${id}/${preclaimedUid}`]: "123456", [`userClasses/${teacherUid}/${id}`]: true,
+      [`teacherInvites/${invite}`]: { classId: id, createdAt: now, expiresAt: now + 600000, createdBy: teacherUid },
+      [`displays/${display}`]: projection, [`classMaterials/${id}/${pageId}`]: asset,
+      [`classMaterialSessions/${id}/${uid}`]: session
+    }));
+    const check = active ? assertSucceeds : assertFails;
+    await check(update(ref(teacher, `classes/${id}`), { title: classroom.title }));
+    await check(set(ref(teacher, `teacherKeys/${id}`), "123456"));
+    await check(set(ref(teacher, `boardLookup/${board}`), { classId: id, studentId: sid }));
+    await check(update(ref(teacher, `students/${sid}`), { updatedAt: now }));
+    await check(set(ref(teacher, `boardPages/${board}/${pageId}`), page));
+    await check(update(ref(student, `boards/${board}/meta`), { revision: 1 }));
+    for (const prefix of [`boards/${board}`, `boards/${board}/pages/${pageId}`]) {
+      await check(set(ref(student, `${prefix}/studentStrokes/stroke_1`), stroke(uid)));
+      await check(set(ref(teacher, `${prefix}/teacherStrokes/stroke_1`), stroke(teacherUid)));
+      await check(set(ref(student, `${prefix}/studentText`), studentText(uid)));
+      await check(set(ref(teacher, `${prefix}/stickyNotes/note_1`), stickyNote(teacherUid)));
+    }
+    await check(set(ref(student, `presence/${id}/${sid}`), { uid, online: true, drawing: false, lastSeen: now }));
+    await check(set(ref(student, `activeStrokes/${board}/student/${uid}`), { draft: true }));
+    await check(set(ref(teacher, `activeStrokes/${board}/teacher/${teacherUid}`), { draft: true }));
+    await check(set(ref(teacher, `displays/${display}`), projection));
+    await check(set(ref(screen, `displaySessions/${screenUid}`), { displayToken: display, boardToken: board, updatedAt: now }));
+    await check(set(ref(student, `classMaterialSessions/${id}/${uid}`), session));
+    await check(get(ref(student, `classMaterials/${id}/${pageId}`)));
+    await check(set(ref(teacher, `classMaterials/${id}/page_NEWTTL`), asset));
+    const newTeacher = env.authenticatedContext(`ttl-key-${sequence}`).database();
+    await check(set(ref(newTeacher, `teacherKeyClaims/${id}/ttl-key-${sequence}`), "123456"));
+    await check(set(ref(env.authenticatedContext(preclaimedUid).database(), `classes/${id}/admins/${preclaimedUid}`), true));
+    const invited = env.authenticatedContext(invitedUid).database();
+    await check(set(ref(invited, `teacherInvites/${invite}/claimedBy`), invitedUid));
+    if (!active) await env.withSecurityRulesDisabled((context) => set(ref(context.database(), `teacherInvites/${invite}/claimedBy`), invitedUid));
+    await check(set(ref(invited, `teacherClaims/${id}/${invitedUid}`), invite));
+    if (!active) await env.withSecurityRulesDisabled((context) => set(ref(context.database(), `teacherClaims/${id}/${invitedUid}`), invite));
+    await check(set(ref(invited, `classes/${id}/admins/${invitedUid}`), true));
+
+    const canonical = { ...directory, expiresAt: createdAt + ttl };
+    // Both deadline fields migrate together, without changing the original creation time or boards.
+    await check(update(ref(teacher), { [`classes/${id}/expiresAt`]: createdAt + ttl, [`publicClasses/${id}`]: canonical }));
+    if (active) {
+      await assertFails(set(ref(teacher, `classes/${id}/expiresAt`), createdAt + ttl + 1));
+      await assertFails(set(ref(teacher, `classes/${id}/createdAt`), now));
+      await assertFails(set(ref(teacher, `classes/${id}/createdAt`), null));
+      expect((await get(ref(teacher, `classes/${id}/createdAt`))).val()).toBe(createdAt);
+      expect((await get(ref(teacher, `publicClasses/${id}/expiresAt`))).val()).toBe(createdAt + ttl);
+      expect((await get(ref(student, `boards/${board}/studentStrokes/stroke_1`))).val().points).toEqual(stroke(uid).points);
+    } else {
+      const paths = [`classes/${id}`, `publicClasses/${id}`, `students/${sid}`, `boardLookup/${board}`, `boardPages/${board}`, `boards/${board}`, `activeStrokes/${board}`, `presence/${id}`, `teacherKeys/${id}`, `teacherKeyClaims/${id}`, `teacherClaims/${id}`, `teacherSlots/${id}`, `teacherInvites/${invite}`, `displays/${display}`, `classMaterials/${id}`, `classMaterialSessions/${id}`, `userClasses/${teacherUid}/${id}`];
+      await assertSucceeds(update(ref(teacher), Object.fromEntries(paths.map((path) => [path, null]))));
+      await env.withSecurityRulesDisabled(async (context) => {
+        for (const path of paths) expect((await get(ref(context.database(), path))).exists()).toBe(false);
+      });
+    }
+  });
+});
 
 describe("PDF 截圖教材權限", () => {
   let capClass, capStudent, capBoard, teacher, studentDb, stranger, now;
@@ -22,7 +102,7 @@ describe("PDF 截圖教材權限", () => {
     page = { id: assetId, order: 1, createdAt: now, createdBy: "capture-teacher", backgroundImage: { type: "rtdb-capture", classId: capClass, assetId, scale: 1, x: .5, y: .5, updatedAt: now, updatedBy: "capture-teacher" } };
     const main = { id: "main", order: 0, createdAt: now, createdBy: "capture-teacher" };
     await env.withSecurityRulesDisabled((context) => update(ref(context.database()), {
-      [`classes/${capClass}`]: { title: "教材測試", createdAt: now, expiresAt: now + 10800000, updatedAt: now, status: "active", admins: { "capture-teacher": true }, studentOrder: { [capStudent]: 0 }, boardPages: { main } },
+      [`classes/${capClass}`]: { title: "教材測試", createdAt: now, expiresAt: now + 36000000, updatedAt: now, status: "active", admins: { "capture-teacher": true }, studentOrder: { [capStudent]: 0 }, boardPages: { main } },
       [`students/${capStudent}`]: { classId: capClass, boardToken: capBoard, studentUid: "capture-student", enabled: true, locked: false, seatNumber: "1", displayName: "學生", createdAt: now, updatedAt: now },
       [`boardLookup/${capBoard}`]: { classId: capClass, studentId: capStudent },
       [`boardPages/${capBoard}`]: { main }
@@ -107,7 +187,7 @@ describe("PDF 截圖教材權限", () => {
     await send(); await bindSession();
     await assertSucceeds(update(ref(teacher, `classes/${capClass}`), { status: "closed" }));
     await assertFails(set(ref(teacher, `classMaterials/${capClass}/${otherId}`), asset));
-    await env.withSecurityRulesDisabled((context) => update(ref(context.database(), `classes/${capClass}`), { createdAt: now - 10800001, expiresAt: now - 1 }));
+    await env.withSecurityRulesDisabled((context) => update(ref(context.database(), `classes/${capClass}`), { createdAt: now - 36000001, expiresAt: now - 1 }));
     await assertFails(get(ref(studentDb, `classMaterials/${capClass}/${assetId}`)));
     await assertFails(bindSession());
     await assertFails(set(ref(teacher, `classMaterials/${capClass}/${otherId}`), asset));
@@ -117,7 +197,7 @@ describe("PDF 截圖教材權限", () => {
 });
 describe("Realtime Database 權限",()=>{
   it("所有已登入使用者可讀精簡課程目錄且只有老師可同步",async()=>{const teacherDb=env.authenticatedContext("teacher").database(),otherDb=env.authenticatedContext("other-directory-reader").database(),unauthenticatedDb=env.unauthenticatedContext().database(),path=`publicClasses/${classId}`;await assertSucceeds(get(ref(otherDb,"publicClasses")));await assertFails(get(ref(unauthenticatedDb,"publicClasses")));await assertFails(update(ref(otherDb,path),{status:"closed"}));await assertFails(update(ref(teacherDb,path),{title:"偽造名稱"}));await assertFails(update(ref(teacherDb,path),{privateData:"不可公開"}));const classroom=(await get(ref(teacherDb,`classes/${classId}`))).val();await assertSucceeds(set(ref(teacherDb,path),{title:classroom.title,className:classroom.className,createdAt:classroom.createdAt,expiresAt:classroom.expiresAt,updatedAt:classroom.updatedAt,status:classroom.status,studentCount:classroom.studentCount}));});
-  it("新課程只能設定為建立後 3 小時到期",async()=>{const db=env.authenticatedContext("new-class-teacher").database(),now=Date.now(),base={title:"三小時課堂",className:"",activityName:"",createdAt:now,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:0,admins:{"new-class-teacher":true}};await assertSucceeds(set(ref(db,"classes/three-hour-class"),{...base,expiresAt:now+10_800_000}));await assertFails(set(ref(db,"classes/twelve-hour-class"),{...base,expiresAt:now+43_200_000}));});
+  it("新課程只能設定為建立後 10 小時到期",async()=>{const db=env.authenticatedContext("new-class-teacher").database(),now=Date.now(),base={title:"十小時課堂",className:"",activityName:"",createdAt:now,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:0,admins:{"new-class-teacher":true}};await assertSucceeds(set(ref(db,"classes/ten-hour-class"),{...base,expiresAt:now+36_000_000}));await assertFails(set(ref(db,"classes/three-hour-class"),{...base,expiresAt:now+10_800_000}));await assertFails(set(ref(db,"classes/twelve-hour-class"),{...base,expiresAt:now+43_200_000}));});
   it("老師可讀課堂與寫批注",async()=>{const db=env.authenticatedContext("teacher").database();await assertSucceeds(get(ref(db,`classes/${classId}`)));await assertSucceeds(set(ref(db,`boards/${token}/teacherStrokes/stroke_1`),stroke("teacher")));});
   it("老師批注只接受布林值的平滑設定",async()=>{const db=env.authenticatedContext("teacher").database();await assertSucceeds(set(ref(db,`boards/${token}/teacherStrokes/stroke_1`),{...stroke("teacher"),smooth:true}));await assertFails(set(ref(db,`boards/${token}/teacherStrokes/stroke_1`),{...stroke("teacher"),smooth:"true"}));});
   it("老師可管理便條貼，學生只能讀取",async()=>{const teacherDb=env.authenticatedContext("teacher").database(),studentDb=env.authenticatedContext("student").database();await assertSucceeds(set(ref(teacherDb,`boards/${token}/stickyNotes/note_1`),stickyNote("teacher")));await assertSucceeds(get(ref(studentDb,`boards/${token}/stickyNotes/note_1`)));await assertFails(update(ref(studentDb,`boards/${token}/stickyNotes/note_1`),{x:.2}));await assertSucceeds(update(ref(teacherDb,`boards/${token}/stickyNotes/note_1`),{x:.2,updatedAt:3}));await assertSucceeds(set(ref(teacherDb,`boards/${token}/stickyNotes/note_1`),null));});
@@ -150,7 +230,7 @@ describe("Realtime Database 權限",()=>{
   it("永久老師連結可用六位數密鑰授權多台相同權限裝置",async()=>{
     const keyClass="class-key-access",key="012345",now=Date.now(),teacherDb=env.authenticatedContext("key-teacher").database(),firstDb=env.authenticatedContext("key-monitor-1").database(),secondDb=env.authenticatedContext("key-monitor-2").database();
     await env.withSecurityRulesDisabled(async context=>update(ref(context.database()),{
-      [`classes/${keyClass}`]:{title:"密鑰課堂",className:"",activityName:"",createdAt:now,expiresAt:now+10800000,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:0,admins:{"key-teacher":true}},
+      [`classes/${keyClass}`]:{title:"密鑰課堂",className:"",activityName:"",createdAt:now,expiresAt:now+36000000,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:0,admins:{"key-teacher":true}},
       [`userClasses/key-teacher/${keyClass}`]:true,
       [`teacherKeys/${keyClass}`]:key
     }));
@@ -194,7 +274,7 @@ describe("Realtime Database 權限",()=>{
     const sharedClass="class-shared-rights",sharedStudent="student-shared-rights",sharedBoard="23456789abcdefghjkmnpqrs",displayToken="23456789ABCDEFGHJKLMNPQR",inviteToken="ABCDEFGHJKLMNPQRSTUVWX29",now=Date.now(),peerUid="shared-monitor",peerDb=env.authenticatedContext(peerUid).database();
     const pages={main:{id:"main",order:0,createdAt:1,createdBy:"shared-teacher"}};
     await env.withSecurityRulesDisabled(async context=>update(ref(context.database()),{
-      [`classes/${sharedClass}`]:{title:"同權限課堂",className:"",activityName:"",createdAt:now,expiresAt:now+10800000,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:1,displayToken,admins:{"shared-teacher":true,[peerUid]:true},studentOrder:{[sharedStudent]:0},boardPages:pages},
+      [`classes/${sharedClass}`]:{title:"同權限課堂",className:"",activityName:"",createdAt:now,expiresAt:now+36000000,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:1,displayToken,admins:{"shared-teacher":true,[peerUid]:true},studentOrder:{[sharedStudent]:0},boardPages:pages},
       [`students/${sharedStudent}`]:{classId:sharedClass,boardToken:sharedBoard,seatNumber:"01",displayName:"同學",enabled:true,locked:false,createdAt:1,updatedAt:1},
       [`boardLookup/${sharedBoard}`]:{classId:sharedClass,studentId:sharedStudent},
       [`boardPages/${sharedBoard}`]:pages,
@@ -215,7 +295,7 @@ describe("Realtime Database 權限",()=>{
   });
   it("老師授權連結不能被第二個裝置重複使用",async()=>{const inviteToken="abcdefghjkmnpqrstuvwx234",now=Date.now(),teacherDb=env.authenticatedContext("teacher").database(),firstDb=env.authenticatedContext("first-monitor").database(),otherDb=env.authenticatedContext("other-monitor").database();await assertSucceeds(set(ref(teacherDb,`teacherInvites/${inviteToken}`),{classId,createdBy:"teacher",createdAt:now,expiresAt:now+600000}));await assertSucceeds(set(ref(firstDb,`teacherInvites/${inviteToken}/claimedBy`),"first-monitor"));await assertFails(set(ref(otherDb,`teacherInvites/${inviteToken}/claimedBy`),"other-monitor"));await assertFails(set(ref(otherDb,`teacherClaims/${classId}/other-monitor`),inviteToken));await assertFails(set(ref(otherDb,`classes/${classId}/admins/other-monitor`),true));});
   it("過期的老師授權連結不能被使用",async()=>{const inviteToken="23456789ABCDEFGHJKLMNPQR",otherDb=env.authenticatedContext("expired-monitor").database();await env.withSecurityRulesDisabled(async context=>set(ref(context.database(),`teacherInvites/${inviteToken}`),{classId,createdBy:"teacher",createdAt:1,expiresAt:2}));await assertFails(set(ref(otherDb,`teacherInvites/${inviteToken}/claimedBy`),"expired-monitor"));});
-  it("六位數密鑰可授權不限數量的老師",async()=>{const unlimitedClass="class-unlimited",key="654321",now=Date.now();await env.withSecurityRulesDisabled(async context=>await update(ref(context.database()),{[`classes/${unlimitedClass}`]:{title:"不限老師",className:"",activityName:"",createdAt:now,expiresAt:now+10800000,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:0,admins:{"unlimited-teacher":true},studentOrder:{}},[`teacherKeys/${unlimitedClass}`]:key}));for(let i=1;i<=8;i++){const uid=`unlimited-teacher-${i}`,db=env.authenticatedContext(uid).database();await assertSucceeds(set(ref(db,`teacherKeyClaims/${unlimitedClass}/${uid}`),key));await assertSucceeds(set(ref(db,`classes/${unlimitedClass}/admins/${uid}`),true));await assertSucceeds(set(ref(db,`userClasses/${uid}/${unlimitedClass}`),true));await assertSucceeds(set(ref(db,`teacherKeyClaims/${unlimitedClass}/${uid}`),null));await assertSucceeds(get(ref(db,`classes/${unlimitedClass}`)));}});
+  it("六位數密鑰可授權不限數量的老師",async()=>{const unlimitedClass="class-unlimited",key="654321",now=Date.now();await env.withSecurityRulesDisabled(async context=>await update(ref(context.database()),{[`classes/${unlimitedClass}`]:{title:"不限老師",className:"",activityName:"",createdAt:now,expiresAt:now+36000000,updatedAt:now,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:0,admins:{"unlimited-teacher":true},studentOrder:{}},[`teacherKeys/${unlimitedClass}`]:key}));for(let i=1;i<=8;i++){const uid=`unlimited-teacher-${i}`,db=env.authenticatedContext(uid).database();await assertSucceeds(set(ref(db,`teacherKeyClaims/${unlimitedClass}/${uid}`),key));await assertSucceeds(set(ref(db,`classes/${unlimitedClass}/admins/${uid}`),true));await assertSucceeds(set(ref(db,`userClasses/${uid}/${unlimitedClass}`),true));await assertSucceeds(set(ref(db,`teacherKeyClaims/${unlimitedClass}/${uid}`),null));await assertSucceeds(get(ref(db,`classes/${unlimitedClass}`)));}});
   it("課程到期時間建立後不可延長",async()=>{const db=env.authenticatedContext("teacher").database(),current=(await get(ref(db,`classes/${classId}/expiresAt`))).val();await assertFails(set(ref(db,`classes/${classId}/expiresAt`),current+60000));});
-  it("到期後禁止修改但允許老師完整刪除",async()=>{const expiredClass="expired-class",expiredStudent="expired-student",expiredBoard="ExpiredBoardToken23456789",now=Date.now(),pages={main:{id:"main",order:0,createdAt:now,createdBy:"expired-teacher"}};await env.withSecurityRulesDisabled(async context=>update(ref(context.database()),{[`classes/${expiredClass}`]:{title:"已到期",className:"",activityName:"",createdAt:now-10800001,expiresAt:now-1,updatedAt:now-1,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:1,admins:{"expired-teacher":true},studentOrder:{[expiredStudent]:0},boardPages:pages},[`students/${expiredStudent}`]:{classId:expiredClass,boardToken:expiredBoard,seatNumber:"01",displayName:"到期學生",studentUid:"expired-student-device",enabled:true,locked:false,createdAt:now-1,updatedAt:now-1},[`boardLookup/${expiredBoard}`]:{classId:expiredClass,studentId:expiredStudent},[`boardPages/${expiredBoard}`]:pages,[`boards/${expiredBoard}/meta`]:{classId:expiredClass,studentId:expiredStudent,revision:0,updatedAt:now-1},[`userClasses/expired-teacher/${expiredClass}`]:true}));const teacherDb=env.authenticatedContext("expired-teacher").database(),studentDb=env.authenticatedContext("expired-student-device").database();await assertSucceeds(get(ref(studentDb,`classes/${expiredClass}/expiresAt`)));await assertFails(update(ref(teacherDb,`classes/${expiredClass}`),{title:"不可修改"}));await assertFails(update(ref(studentDb,`students/${expiredStudent}`),{updatedAt:now}));await assertFails(set(ref(studentDb,`boards/${expiredBoard}/studentStrokes/stroke_1`),stroke("expired-student-device")));await assertFails(set(ref(teacherDb,`boards/${expiredBoard}/teacherStrokes/stroke_1`),stroke("expired-teacher")));await assertSucceeds(update(ref(teacherDb),{[`classes/${expiredClass}`]:null,[`students/${expiredStudent}`]:null,[`boardLookup/${expiredBoard}`]:null,[`boards/${expiredBoard}`]:null,[`boardPages/${expiredBoard}`]:null,[`userClasses/expired-teacher/${expiredClass}`]:null}));});
+  it("到期後禁止修改但允許老師完整刪除",async()=>{const expiredClass="expired-class",expiredStudent="expired-student",expiredBoard="ExpiredBoardToken23456789",now=Date.now(),pages={main:{id:"main",order:0,createdAt:now,createdBy:"expired-teacher"}};await env.withSecurityRulesDisabled(async context=>update(ref(context.database()),{[`classes/${expiredClass}`]:{title:"已到期",className:"",activityName:"",createdAt:now-36000001,expiresAt:now-1,updatedAt:now-1,status:"active",allowStudentWriting:true,allowStudentClear:false,showTeacherAnnotations:true,studentCount:1,admins:{"expired-teacher":true},studentOrder:{[expiredStudent]:0},boardPages:pages},[`students/${expiredStudent}`]:{classId:expiredClass,boardToken:expiredBoard,seatNumber:"01",displayName:"到期學生",studentUid:"expired-student-device",enabled:true,locked:false,createdAt:now-1,updatedAt:now-1},[`boardLookup/${expiredBoard}`]:{classId:expiredClass,studentId:expiredStudent},[`boardPages/${expiredBoard}`]:pages,[`boards/${expiredBoard}/meta`]:{classId:expiredClass,studentId:expiredStudent,revision:0,updatedAt:now-1},[`userClasses/expired-teacher/${expiredClass}`]:true}));const teacherDb=env.authenticatedContext("expired-teacher").database(),studentDb=env.authenticatedContext("expired-student-device").database();await assertSucceeds(get(ref(studentDb,`classes/${expiredClass}/expiresAt`)));await assertFails(update(ref(teacherDb,`classes/${expiredClass}`),{title:"不可修改"}));await assertFails(update(ref(studentDb,`students/${expiredStudent}`),{updatedAt:now}));await assertFails(set(ref(studentDb,`boards/${expiredBoard}/studentStrokes/stroke_1`),stroke("expired-student-device")));await assertFails(set(ref(teacherDb,`boards/${expiredBoard}/teacherStrokes/stroke_1`),stroke("expired-teacher")));await assertSucceeds(update(ref(teacherDb),{[`classes/${expiredClass}`]:null,[`students/${expiredStudent}`]:null,[`boardLookup/${expiredBoard}`]:null,[`boards/${expiredBoard}`]:null,[`boardPages/${expiredBoard}`]:null,[`userClasses/expired-teacher/${expiredClass}`]:null}));});
 });

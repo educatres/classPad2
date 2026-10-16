@@ -9,7 +9,7 @@ const uid = "teacher", classId = "class-1", capture = { mimeType: "image/jpeg", 
 let data, classroom;
 beforeEach(() => {
   vi.clearAllMocks();
-  classroom = { createdAt: Date.now(), expiresAt: Date.now() + 10800000, status: "active", admins: { teacher: true }, studentOrder: {}, boardPages: { main: { id: "main", order: 0, createdAt: 1, createdBy: uid }, page_OLDOLD: { id: "page_OLDOLD", order: 8, createdAt: 2, createdBy: uid } } };
+  classroom = { createdAt: Date.now(), expiresAt: Date.now() + 36000000, status: "active", admins: { teacher: true }, studentOrder: {}, boardPages: { main: { id: "main", order: 0, createdAt: 1, createdBy: uid }, page_OLDOLD: { id: "page_OLDOLD", order: 8, createdAt: 2, createdBy: uid } } };
   data = { ".info/connected": true, [`classes/${classId}`]: classroom };
   mock.get.mockImplementation(async (path) => ({ val: () => path.startsWith(`classes/${classId}/boardPages/`) ? classroom.boardPages[path.split("/").at(-1)] || null : data[path] || null }));
   mock.onValue.mockImplementation((path, callback) => { callback({ val: () => data[path] }); return () => {}; });
