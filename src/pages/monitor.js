@@ -197,6 +197,8 @@ function renderReviewPageControls() {
   const pages = classPages(); let index = pages.findIndex((item) => item.id === currentReviewPageId);
   if (index < 0) { index = 0; currentReviewPageId = pages[0].id; }
   document.querySelector("#reviewPageLabel").textContent = `第 ${index + 1} / ${pages.length} 頁`;
+  document.querySelector("#projectStudentPage").title = `讓這位學生跳到老師目前批注的第 ${index + 1} 頁`;
+  document.querySelector("#projectStudentPage").setAttribute("aria-label", `幫學生翻到目前批注的第 ${index + 1} 頁`);
   document.querySelector("#reviewPrevPage").disabled = index <= 0; document.querySelector("#reviewNextPage").disabled = index >= pages.length - 1;
   const select = document.querySelector("#insertPagePosition"), selected = Math.min(pages.length + 1, Number(select.value) || index + 2);
   select.innerHTML = Array.from({ length: pages.length + 1 }, (_, optionIndex) => `<option value="${optionIndex + 1}">插入為第 ${optionIndex + 1} 頁</option>`).join("");
@@ -262,7 +264,7 @@ document.querySelector("#projectStudentPage").onclick = async (event) => {
   button.disabled = true;
   try {
     await requestStudentPage(student, pageId);
-    toast(`已通知 ${student.seatNumber} ${student.displayName} 切換至第 ${number} 頁；離線裝置將於恢復連線後切換。`);
+    toast(`已請 ${student.seatNumber} ${student.displayName} 翻到老師正在批注的第 ${number} 頁；離線時會於恢復連線後跳轉。`);
   } catch (error) { toast(explainError(error), "error"); }
   finally { button.disabled = false; }
 };

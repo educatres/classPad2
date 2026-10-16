@@ -39,7 +39,7 @@ const applyPageRequest = createStudentPageRequestHandler(token, (pageId) => {
     openPage(pageId);
   }
   document.querySelector("#newMaterialNotice").hidden = true;
-  toast(`老師已將白板切換至第 ${pages.findIndex((page) => page.id === pageId) + 1} 頁。`);
+  toast(`老師已幫你翻到批注的第 ${pages.findIndex((page) => page.id === pageId) + 1} 頁。`);
 });
 
 function loadStudentSmoothing() {
