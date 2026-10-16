@@ -108,7 +108,7 @@ export class StudentTextLayer {
 
   setValue(value) {
     const next = normalizeStudentText(value);
-    if (!(this.dirty && document.activeElement === this.editor) && this.editor.value !== next.text) this.editor.value = next.text;
+    if (!this.dirty && this.editor.value !== next.text) this.editor.value = next.text;
     if (!this.dirty || this.editor.value === next.text) {
       this.dirty = false;
       this.lastSubmitted = { text: next.text, scrollTop: next.scrollTop };
@@ -157,15 +157,21 @@ export class StudentTextLayer {
     if (finishComposition) this.composing = false;
     if (!this.editable || this.composing || !this.dirty) return;
     const next = { text: this.editor.value, scrollTop: Math.max(0, Math.round(this.editor.scrollTop)), layoutVersion: 1 };
-    if (next.text === this.lastSubmitted.text && next.scrollTop === this.lastSubmitted.scrollTop) { this.dirty = false; return; }
-    this.lastSubmitted = { text: next.text, scrollTop: next.scrollTop };
-    try {
-      await this.onChange?.(next);
-      if (this.editor.value === next.text) this.dirty = false;
-    } catch (error) {
-      this.dirty = true;
-      this.onError?.(error);
-    }
+    if (this.pendingSave && next.text === this.pendingSave.value.text && next.scrollTop === this.pendingSave.value.scrollTop) return this.pendingSave.promise;
+    if (!this.pendingSave && next.text === this.lastSubmitted.text && next.scrollTop === this.lastSubmitted.scrollTop) { this.dirty = false; return; }
+    const pending = { value: next }; this.pendingSave = pending;
+    pending.promise = (async () => {
+      try {
+        await this.onChange?.(next);
+        if (this.pendingSave === pending) {
+          this.lastSubmitted = { text: next.text, scrollTop: next.scrollTop };
+          if (this.editor.value === next.text && Math.round(this.editor.scrollTop) === next.scrollTop) this.dirty = false;
+        }
+      } catch (error) {
+        if (this.pendingSave === pending) { this.dirty = true; this.onError?.(error); }
+      } finally { if (this.pendingSave === pending) this.pendingSave = null; }
+    })();
+    return pending.promise;
   }
 
   destroy() {

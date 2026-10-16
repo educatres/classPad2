@@ -54,7 +54,7 @@ function fail(error) {
   pdfPanel?.refresh();
   message.textContent = `講解白板無法使用：${lectureError(error)}${queue.pending ? " 仍有未保存內容，請保留此視窗。" : ""}`;
 }
-function finishInput() { engine?.finishCurrent(); engine?.pointers.clear(); }
+function finishInput() { engine?.finishInput(); }
 function canChangePage() {
   finishInput();
   if (busy || fatal) return false;

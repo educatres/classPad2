@@ -16,7 +16,7 @@ function createEngine() {
     pointers: new Map(),
     scale: 1,
     smoothing: false,
-    stage: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) },
+    stage: { dataset: {}, classList: { toggle: vi.fn() }, getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) },
     strokes: { studentStrokes: new Map(), teacherStrokes: new Map() },
     tool: "pen",
     uid: "student-1",
@@ -145,5 +145,96 @@ describe("BoardEngine iPad 指標處理", () => {
     engine.resetZoom();
 
     expect(engine.onViewChange).toHaveBeenCalledWith({ scale: 1, panX: 0, panY: 0 });
+  });
+});
+
+describe("BoardEngine 拖動畫板", () => {
+  it("滑鼠、單指及 Pencil 拖動只改視圖，保留所有圖層與復原歷史", () => {
+    for (const type of ["mouse", "touch", "pen"]) {
+      const engine = createEngine(); engine.onComplete = vi.fn(); engine.onRemove = vi.fn(); engine.onViewChange = vi.fn();
+      const stroke = { id: "existing", points: [[.1, .1], [.2, .2]] };
+      engine.strokes.studentStrokes.set(stroke.id, stroke); engine.strokes.teacherStrokes.set(stroke.id, stroke);
+      engine.undoStack.push({ type: "add", stroke });
+      engine.setTool("pan"); engine.pointerDown(pointerEvent(1, type, 10, 20)); engine.pointerMove(pointerEvent(1, type, 40, 60)); engine.pointerUp(pointerEvent(1, type, 40, 60));
+      expect(engine.onViewChange).toHaveBeenLastCalledWith({ scale: 1, panX: 30, panY: 40 });
+      expect(engine.strokes.studentStrokes.get(stroke.id)).toBe(stroke); expect(engine.strokes.teacherStrokes.get(stroke.id)).toBe(stroke);
+      expect(engine.undoStack).toHaveLength(1); expect(engine.redoStack).toHaveLength(0);
+      expect(engine.onComplete).not.toHaveBeenCalled(); expect(engine.onRemove).not.toHaveBeenCalled(); expect(engine.onActive).not.toHaveBeenCalled();
+      expect(engine.panDrag).toBeNull(); expect(engine.stage.dataset.tool).toBe("pan");
+    }
+  });
+  it("縮放並拖動後切回畫筆，保存正確的原始白板座標", () => {
+    const engine = createEngine(); engine.scale = 2; engine.setTool("pan");
+    engine.pointerDown(pointerEvent(1, "mouse", 10, 10)); engine.pointerUp(pointerEvent(1, "mouse", 30, 40)); engine.setTool("pen");
+    engine.pointerDown(pointerEvent(2, "mouse", 60, 70)); engine.pointerUp(pointerEvent(2, "mouse", 80, 90));
+    expect(engine.undoStack[0].stroke.points.map((point) => point.slice(0, 2))).toEqual([[.2, .2], [.3, .3]]);
+    expect([engine.scale, engine.panX, engine.panY]).toEqual([2, 20, 30]);
+  });
+  it("放開、取消或遺失指標後停止拖動，離開畫板仍可結束", () => {
+    for (const cancel of [false, true]) {
+      const engine = createEngine(); engine.setTool("pan");
+      const start = pointerEvent(1, "mouse", 50, 50); start.currentTarget.hasPointerCapture = () => true; start.currentTarget.releasePointerCapture = vi.fn();
+      engine.pointerDown(start); engine.pointerMove(pointerEvent(1, "mouse", 400, 400));
+      if (cancel) engine.pointerCancel(pointerEvent(1, "mouse", 0, 0)); else engine.pointerUp(pointerEvent(1, "mouse", 400, 400));
+      const view = [engine.panX, engine.panY]; engine.pointerMove(pointerEvent(1, "mouse", -400, -400));
+      expect([engine.panX, engine.panY]).toEqual(view); expect(engine.pointers.size).toBe(0); expect(engine.panDrag).toBeNull();
+      expect(start.currentTarget.releasePointerCapture).toHaveBeenCalledWith(1);
+    }
+  });
+  it("切換工具完成原有筆畫，舊指標不會繼續寫入或拖動", () => {
+    const engine = createEngine(); engine.onComplete = vi.fn();
+    engine.pointerDown(pointerEvent(1, "pen", 10, 10)); engine.pointerMove(pointerEvent(1, "pen", 20, 20)); engine.setTool("pan");
+    engine.pointerMove(pointerEvent(1, "pen", 60, 60)); engine.pointerUp(pointerEvent(1, "pen", 60, 60));
+    expect(engine.onComplete).toHaveBeenCalledOnce(); expect(engine.undoStack[0].stroke.points).toHaveLength(2);
+    expect([engine.panX, engine.panY]).toEqual([0, 0]);
+  });
+  it("單指拖動轉雙指縮放再回到單指時，不跳位或產生筆跡", () => {
+    const engine = createEngine(); engine.setTool("pan");
+    engine.pointerDown(pointerEvent(1, "touch", 20, 20)); engine.pointerMove(pointerEvent(1, "touch", 30, 30));
+    engine.pointerDown(pointerEvent(2, "touch", 70, 30)); engine.pointerMove(pointerEvent(2, "touch", 90, 30));
+    expect(engine.scale).toBe(1.5); const before = engine.panX;
+    engine.pointerUp(pointerEvent(2, "touch", 90, 30)); engine.pointerMove(pointerEvent(1, "touch", 35, 35));
+    expect(engine.panX).toBe(before + 5); expect(engine.current).toBeNull(); expect(engine.undoStack).toHaveLength(0);
+  });
+  it("鎖定書寫後仍可拖動縮放，畫筆、橡皮擦與復原重做都不改資料", async () => {
+    const engine = createEngine(); const stroke = { id: "old", points: [[.1, .1], [.2, .2]] };
+    engine.strokes.studentStrokes.set(stroke.id, stroke); engine.undoStack.push({ type: "add", stroke }); engine.redoStack.push({ type: "add", stroke });
+    engine.onComplete = vi.fn(); engine.onRemove = vi.fn(); engine.setReadOnly(true);
+    for (const tool of ["pen", "eraser"]) { engine.setTool(tool); engine.pointerDown(pointerEvent(1, "mouse", 10, 10)); engine.pointerUp(pointerEvent(1, "mouse", 20, 20)); }
+    await engine.undo(); await engine.redo();
+    expect(engine.onComplete).not.toHaveBeenCalled(); expect(engine.onRemove).not.toHaveBeenCalled(); expect(engine.strokes.studentStrokes.size).toBe(1);
+    engine.setTool("pan"); engine.pointerDown(pointerEvent(1, "mouse", 10, 10)); engine.pointerUp(pointerEvent(1, "mouse", 40, 40));
+    expect(engine.panX).toBe(30); engine.zoomBy(.1); expect(engine.scale).toBe(1.1); engine.resetZoom(); expect([engine.scale, engine.panX, engine.panY]).toEqual([1, 0, 0]);
+  });
+  it("停用互動及重設視圖都釋放拖動，後續指標事件不會恢復舊位置", () => {
+    for (const stop of ["disable", "reset"]) {
+      const engine = createEngine(); engine.setTool("pan"); engine.pointerDown(pointerEvent(1, "mouse", 10, 10)); engine.pointerMove(pointerEvent(1, "mouse", 30, 30));
+      if (stop === "disable") engine.setEnabled(false); else engine.resetZoom();
+      const panX = engine.panX; engine.pointerMove(pointerEvent(1, "mouse", 50, 50));
+      expect(engine.panX).toBe(panX); expect(engine.panDrag).toBeNull(); expect(engine.pointers.size).toBe(0);
+    }
+  });
+  it("各縮放倍率都保留部分畫板可見，並忽略右鍵及畫板外的書寫起點", () => {
+    const engine = createEngine(); engine.setTool("pan");
+    engine.pointerDown({ ...pointerEvent(1, "mouse", 20, 20), button: 2 }); expect(engine.panDrag).toBeFalsy();
+    for (const scale of [.25, 1, 4]) {
+      engine.scale = scale;
+      for (const destination of [-10000, 10000]) {
+        engine.pointerDown(pointerEvent(2, "mouse", 50, 50)); engine.pointerUp(pointerEvent(2, "mouse", destination, destination));
+        expect(engine.panX).toBeLessThan(100); expect(engine.panX + 100 * scale).toBeGreaterThan(0);
+      }
+    }
+    engine.resetZoom(); engine.panX = 50; engine.setTool("pen"); engine.pointerDown(pointerEvent(3, "mouse", 10, 10)); engine.pointerUp(pointerEvent(3, "mouse", 20, 20));
+    expect(engine.undoStack).toHaveLength(0);
+  });
+  it("匯出使用完整 1600 × 1200 白板，不套用本機平移縮放", () => {
+    const engine = createEngine(); engine.cssWidth = 100; engine.cssHeight = 75; engine.scale = 3; engine.panX = -20; engine.panY = 15;
+    const stroke = { id: "old" }; engine.strokes.studentStrokes.set(stroke.id, stroke); engine.drawStroke = vi.fn();
+    const context = { fillRect: vi.fn() }, canvas = { getContext: () => context };
+    vi.stubGlobal("document", { createElement: () => canvas });
+    try {
+      expect(engine.exportCanvas()).toMatchObject({ width: 1600, height: 1200 }); expect(engine.drawStroke).toHaveBeenCalledWith(context, stroke);
+      expect(context.fillRect).toHaveBeenCalledWith(0, 0, 1600, 1200); expect([engine.scale, engine.panX, engine.panY, engine.cssWidth, engine.cssHeight]).toEqual([3, -20, 15, 100, 75]);
+    } finally { vi.unstubAllGlobals(); }
   });
 });

@@ -106,13 +106,26 @@ function canStudentEdit() { return Boolean(student && !student.locked && student
 
 function applyInputMode({ focus = false } = {}) {
   const enabled = canStudentEdit();
-  engine?.setEnabled(enabled && activeMode !== "text");
+  engine?.setReadOnly(!enabled);
+  engine?.setEnabled(Boolean(student?.enabled && !expired) && activeMode !== "text");
   textLayer?.setEnabled(enabled);
   textLayer?.setEditing(activeMode === "text");
-  toolbar.querySelectorAll("button[data-tool], button[data-mode]").forEach((button) => button.classList.toggle("active", (button.dataset.tool || button.dataset.mode) === activeMode));
-  document.querySelector("#undoBtn").disabled = activeMode === "text";
-  document.querySelector("#redoBtn").disabled = activeMode === "text";
+  toolbar.querySelectorAll("button[data-tool], button[data-mode]").forEach((button) => { const active = (button.dataset.tool || button.dataset.mode) === activeMode; button.classList.toggle("active", active); button.setAttribute("aria-pressed", String(active)); });
+  document.querySelector("#undoBtn").disabled = !enabled || activeMode === "text";
+  document.querySelector("#redoBtn").disabled = !enabled || activeMode === "text";
   if (focus && activeMode === "text" && enabled) textLayer?.editor.focus({ preventScroll: true });
+}
+
+function switchInputMode(mode, { focus = false } = {}) {
+  engine?.finishInput();
+  if (activeMode === "text" && mode !== "text") {
+    // Submit composition before leaving; keep the local draft until Firebase confirms it.
+    textLayer?.flush({ finishComposition: true });
+    textLayer?.editor.blur();
+  }
+  activeMode = mode;
+  if (mode !== "text") { drawingSettings.tool = mode; engine?.setTool(mode); }
+  applyInputMode({ focus });
 }
 
 function expireStudent() {
@@ -134,6 +147,7 @@ function startExpirationWatch(classId, expiresAt) {
 function openPage(pageId, updatePresence = true) {
   if (!pages.some((page) => page.id === pageId)) pageId = pages[0].id;
   if (engine && currentPageId === pageId) { renderPageControls(); renderBackground(); return; }
+  engine?.finishInput();
   if (user && student) clearActive(token, "student", user.uid);
   presenceDrawing = false;
   stopPage();
@@ -276,13 +290,8 @@ function bindToolbar() {
     renderSmoothingButton();
   };
   renderSmoothingButton();
-  toolbar.querySelectorAll("button[data-tool]").forEach((button) => button.onclick = () => {
-    activeMode = button.dataset.tool;
-    drawingSettings.tool = activeMode;
-    engine?.setTool(drawingSettings.tool);
-    applyInputMode();
-  });
-  document.querySelector("#textToolBtn").onclick = () => { activeMode = "text"; applyInputMode({ focus: true }); };
+  toolbar.querySelectorAll("button[data-tool]").forEach((button) => button.onclick = () => switchInputMode(button.dataset.tool));
+  document.querySelector("#textToolBtn").onclick = () => switchInputMode("text", { focus: true });
   document.querySelector("#colorInput").onchange = (event) => { drawingSettings.color = event.target.value; engine?.setColor(drawingSettings.color); };
   document.querySelector("#widthInput").onchange = (event) => { drawingSettings.width = event.target.value; engine?.setWidth(drawingSettings.width); };
   document.querySelector("#undoBtn").onclick = () => engine?.undo();
