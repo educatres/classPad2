@@ -2,7 +2,7 @@ import { ensureAnonymousUser } from "../firebase/auth.js";
 import { cleanupExpiredClassroom, setStudentPinned, watchClassroom } from "../firebase/classroomRepository.js";
 import { getStudents, updateStudent } from "../firebase/studentRepository.js";
 import { clearLayer, createStickyNote, hasAnyAnswers, markBoardActivity, removeStickyNote, removeStroke, saveStroke, subscribeLayer, subscribeStickyNotes, subscribeStudentText, updateStickyNote, watchBoardMeta } from "../firebase/boardRepository.js";
-import { insertClassBoardPage, setClassPageBackground } from "../firebase/pageRepository.js";
+import { insertClassBoardPage, updateClassPageCaptureLayout } from "../firebase/pageRepository.js";
 import { watchPresence } from "../firebase/presenceRepository.js";
 import { watchConnection } from "../firebase/connection.js";
 import { claimTeacherInvite } from "../firebase/teacherAccessRepository.js";
@@ -32,7 +32,7 @@ let displayOff, watchedDisplayToken, displayState, followingPageUpdate = false;
 let backgroundMoveMode = false, backgroundMoveDrag = null, backgroundMoveSaving = false;
 
 watchConnection(document.querySelector("#connectionBadge"));
-document.querySelector("#reviewBackgroundImage").addEventListener("error", () => toast("底圖載入失敗，請確認 Google Drive 圖片已開放知道連結的使用者檢視。", "error"));
+document.querySelector("#reviewBackgroundImage").addEventListener("error", () => toast("題目底圖載入失敗，請確認網路連線後重試。", "error"));
 document.querySelector("#teacherLink").href = `./teacher.html?class=${encodeURIComponent(classId || "")}`;
 
 function loadGridSize() { try { return normalizeGridSize(localStorage.getItem(`classpad-grid-size:${classId}`)); } catch { return 4; } }
@@ -189,14 +189,14 @@ async function init() {
 
 function currentReviewBackground() { return classPages().find((item) => item.id === currentReviewPageId)?.backgroundImage; }
 function setBackgroundMoveMode(enabled) {
-  backgroundMoveMode = Boolean(enabled && currentStudent && currentReviewBackground());
+  backgroundMoveMode = Boolean(enabled && currentStudent && currentReviewBackground()?.type === "rtdb-capture");
   backgroundMoveDrag = null;
   const stage = document.querySelector("#reviewStage"), button = document.querySelector("#moveBackgroundImage");
   stage.classList.toggle("moving-background", backgroundMoveMode);
   stage.classList.remove("dragging");
   button.classList.toggle("active", backgroundMoveMode);
   button.setAttribute("aria-pressed", String(backgroundMoveMode));
-  button.textContent = backgroundMoveMode ? "完成移動" : "移動底圖";
+  button.textContent = backgroundMoveMode ? "完成移動" : "移動題目";
   reviewEngine?.setEnabled(!backgroundMoveMode);
 }
 function stopReviewPage() { clearBackgroundImage(document.querySelector("#reviewBackgroundImage")); setBackgroundMoveMode(false); reviewOffs.forEach((off) => off()); reviewOffs = []; reviewStickyNotes?.destroy(); reviewStickyNotes = null; reviewTextLayer?.destroy(); reviewTextLayer = null; reviewText = null; reviewEngine?.destroy(); reviewEngine = null; }
@@ -216,15 +216,13 @@ function renderReviewPageControls() {
 function renderReviewBackgroundControls() {
   const background = currentReviewBackground();
   const scale = Math.round((background?.scale || 1) * 100);
-  document.querySelector("#backgroundUrl").value = background?.sourceUrl || "";
   document.querySelector("#backgroundScale").value = String(scale);
   document.querySelector("#backgroundScaleLabel").textContent = `${scale}%`;
   const capture = background?.type === "rtdb-capture";
-  document.querySelector("#backgroundUrl").disabled = capture;
-  document.querySelector("#backgroundUrl").placeholder = capture ? "已派送的 PDF 截圖教材" : "Google Drive 圖片分享網址";
-  document.querySelector("#removeBackgroundImage").disabled = !background || capture;
-  document.querySelector("#moveBackgroundImage").disabled = !background || backgroundMoveSaving;
-  if (!background && backgroundMoveMode) setBackgroundMoveMode(false);
+  document.querySelector("#backgroundScale").disabled = !capture;
+  document.querySelector("#saveBackgroundImage").disabled = !capture || backgroundMoveSaving;
+  document.querySelector("#moveBackgroundImage").disabled = !capture || backgroundMoveSaving;
+  if (!capture && backgroundMoveMode) setBackgroundMoveMode(false);
   showBackgroundImage(document.querySelector("#reviewBackgroundImage"), background);
 }
 
@@ -275,30 +273,20 @@ document.querySelector("#backgroundScale").oninput = (event) => {
   if (background) showBackgroundImage(document.querySelector("#reviewBackgroundImage"), { ...background, scale: scale / 100 });
 };
 document.querySelector("#saveBackgroundImage").onclick = async (event) => {
+  if (currentReviewBackground()?.type !== "rtdb-capture") return;
   const button = event.currentTarget; button.disabled = true;
   try {
-    const pages = await setClassPageBackground(classId, classroom, students, user.uid, currentReviewPageId, currentReviewBackground()?.type === "rtdb-capture" ? currentReviewBackground().assetId : document.querySelector("#backgroundUrl").value, Number(document.querySelector("#backgroundScale").value) / 100);
+    const pages = await updateClassPageCaptureLayout(classId, classroom, students, user.uid, currentReviewPageId, Number(document.querySelector("#backgroundScale").value) / 100);
     classroom.boardPages = boardPagesMap(pages, { createdAt: classroom.createdAt, createdBy: user.uid });
-    renderReviewBackgroundControls();
-    toast(`第 ${pageNumber(currentReviewPageId)} 頁底圖已套用，所有學生會同步看到。`);
-  } catch (error) { toast(explainError(error), "error"); } finally { button.disabled = false; }
-};
-document.querySelector("#removeBackgroundImage").onclick = async (event) => {
-  if (!confirmAction("確定移除本頁底圖？學生與老師的筆跡、批注和便條貼不會被刪除。")) return;
-  const button = event.currentTarget; button.disabled = true;
-  try {
-    const pages = await setClassPageBackground(classId, classroom, students, user.uid, currentReviewPageId, null);
-    classroom.boardPages = boardPagesMap(pages, { createdAt: classroom.createdAt, createdBy: user.uid });
-    renderReviewBackgroundControls();
-    toast("本頁底圖已移除。");
-  } catch (error) { toast(explainError(error), "error"); } finally { button.disabled = false; }
+    toast(`第 ${pageNumber(currentReviewPageId)} 頁題目大小已套用，所有學生會同步看到。`);
+  } catch (error) { toast(explainError(error), "error"); } finally { renderReviewBackgroundControls(); }
 };
 document.querySelector("#moveBackgroundImage").onclick = () => setBackgroundMoveMode(!backgroundMoveMode);
 const reviewStage = document.querySelector("#reviewStage");
 reviewStage.addEventListener("pointerdown", (event) => {
   if (!backgroundMoveMode || backgroundMoveSaving) return;
   const savedBackground = currentReviewBackground();
-  if (!savedBackground) return;
+  if (savedBackground?.type !== "rtdb-capture") return;
   const background = { ...savedBackground, scale: Number(document.querySelector("#backgroundScale").value) / 100 };
   event.preventDefault(); event.stopPropagation();
   reviewStage.setPointerCapture?.(event.pointerId);
@@ -322,9 +310,9 @@ async function finishBackgroundMove(event, cancelled = false) {
   if (cancelled || drag.pageId !== currentReviewPageId) { renderReviewBackgroundControls(); return; }
   backgroundMoveSaving = true; document.querySelector("#moveBackgroundImage").disabled = true;
   try {
-    const pages = await setClassPageBackground(classId, classroom, students, user.uid, drag.pageId, drag.background.type === "rtdb-capture" ? drag.background.assetId : drag.background.sourceUrl, drag.background.scale, { x: drag.x, y: drag.y });
+    const pages = await updateClassPageCaptureLayout(classId, classroom, students, user.uid, drag.pageId, drag.background.scale, { x: drag.x, y: drag.y });
     classroom.boardPages = boardPagesMap(pages, { createdAt: classroom.createdAt, createdBy: user.uid });
-    toast("底圖位置已同步給所有學生與展示畫面。");
+    toast("題目位置已同步給所有學生與展示畫面。");
   } catch (error) { toast(explainError(error), "error"); }
   finally { backgroundMoveSaving = false; renderReviewBackgroundControls(); }
 }
