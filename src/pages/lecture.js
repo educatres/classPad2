@@ -5,6 +5,7 @@ import { cleanupExpiredClassroom, getClassroom, watchClassroom } from "../fireba
 import { watchConnection } from "../firebase/connection.js";
 import { addLecturePage, clearLecturePage, ensureLectureBoard, subscribeLectureStrokes, watchLecturePages, writeLectureStroke } from "../firebase/lectureRepository.js";
 import { BoardEngine } from "../canvas/BoardEngine.js";
+import { renderToolSelection } from "../canvas/toolbar.js";
 import { LectureWriteQueue } from "../whiteboard/LectureWriteQueue.js";
 import { isClassroomExpired, watchClassroomExpiry } from "../utils/classroomExpiration.js";
 import { confirmAction, explainError, toast } from "../utils/ui.js";
@@ -16,6 +17,7 @@ let user, classroom, engine, pages = [], pageId, pageOff, pagesOff, classOff, ex
 let pdfPanel, openingPdf = false, requestedPdf = param("pdf") === "1";
 const message = $("lectureMessage"), toolbar = $("lectureToolbar"), stage = $("lectureStage"), badge = $("syncBadge");
 const queue = new LectureWriteQueue(renderSync);
+const drawingSettings = { tool: "pen", color: "#000000" };
 const connectionOff = watchConnection($("connectionBadge"));
 const onlineOff = onValue(ref(database, ".info/connected"), (snap) => { online = snap.val() === true; renderSync(); });
 $("teacherLink").href = `./teacher.html?class=${encodeURIComponent(classId || "")}`;
@@ -78,8 +80,9 @@ function openPage(id) {
   });
   engine = current;
   current.undoStack = histories.get(id)?.undo || []; current.redoStack = histories.get(id)?.redo || [];
-  current.setColor($("lectureColor").value); current.setWidth($("lectureWidth").value);
-  current.setTool(toolbar.querySelector("[data-tool].active")?.dataset.tool || "pen");
+  current.setColor(drawingSettings.color); current.setWidth($("lectureWidth").value);
+  current.setTool(drawingSettings.tool);
+  renderToolSelection(toolbar, drawingSettings);
   current.setSmoothing($("lectureSmoothing").getAttribute("aria-pressed") === "true");
   pageOff = subscribeLectureStrokes(classId, id, {
     add: (strokeId, stroke) => { if (!queue.touches(strokeId)) current.addStroke("teacherStrokes", strokeId, stroke); },
@@ -125,9 +128,11 @@ async function init() {
   } catch (error) { fail(error); }
 }
 for (const button of toolbar.querySelectorAll("[data-tool]")) button.onclick = () => {
-  finishInput(); toolbar.querySelectorAll("[data-tool]").forEach((item) => { const active = item === button; item.classList.toggle("active", active); item.setAttribute("aria-pressed", String(active)); }); engine?.setTool(button.dataset.tool);
+  finishInput(); drawingSettings.tool = button.dataset.tool;
+  if (button.dataset.penColor) drawingSettings.color = button.dataset.penColor;
+  engine?.setTool(drawingSettings.tool); engine?.setColor(drawingSettings.color);
+  renderToolSelection(toolbar, drawingSettings);
 };
-$("lectureColor").oninput = (event) => engine?.setColor(event.target.value);
 $("lectureWidth").onchange = (event) => engine?.setWidth(event.target.value);
 $("lectureSmoothing").onclick = (event) => { const enabled = event.currentTarget.getAttribute("aria-pressed") !== "true"; event.currentTarget.setAttribute("aria-pressed", String(enabled)); event.currentTarget.textContent = `平滑：${enabled ? "開" : "關"}`; engine?.setSmoothing(enabled); };
 $("lectureUndo").onclick = () => { finishInput(); engine?.undo(); };

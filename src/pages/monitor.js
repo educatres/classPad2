@@ -8,6 +8,7 @@ import { watchConnection } from "../firebase/connection.js";
 import { claimTeacherInvite } from "../firebase/teacherAccessRepository.js";
 import { ensureClassDisplay, projectDisplay, stopDisplay, updateProjectedPage, watchDisplay } from "../firebase/displayRepository.js";
 import { BoardEngine } from "../canvas/BoardEngine.js";
+import { renderToolSelection } from "../canvas/toolbar.js";
 import { StickyNotesLayer } from "../notes/StickyNotesLayer.js";
 import { StudentTextLayer } from "../text/StudentTextLayer.js";
 import { normalizeGridSize, paginateStudents, prioritizePinned } from "../monitor/studentView.js";
@@ -27,6 +28,7 @@ const grid = document.querySelector("#monitorGrid"), state = document.querySelec
 const monitorToolbar = document.querySelector("#monitorToolbar"), showMonitorToolbar = document.querySelector("#showMonitorToolbar"), smoothingButton = document.querySelector("#toggleSmoothing");
 let user, classroom, students = [], presence = {}, page = 0, gridSize = loadGridSize(), teacherSmoothing = loadTeacherSmoothing();
 const previews = new PreviewRegistry(), metaSubscriptions = new Map(), rosterSubscriptions = new Map();
+const drawingSettings = { tool: "pen", color: "#000000" };
 let reviewScroll = 0, studentLoadVersion = 0, unavailable = false;
 let reviewOffs = [], reviewEngine, reviewStickyNotes, reviewTextLayer, reviewText, currentStudent, currentReviewPageId;
 let boardMetaOffs = [], boardMetaRenderFrame, lastTeacherActivityAt = 0, lastTeacherActivityPageId = "";
@@ -279,8 +281,9 @@ function openReviewPage(pageId) {
     onViewChange: (view) => { reviewStickyNotes?.setViewport(view); reviewTextLayer?.setViewport(view); setBackgroundViewport(document.querySelector("#reviewBackgroundLayer"), view); document.querySelector("#reviewZoomScale").textContent = `${Math.round(view.scale * 100)}%`; document.querySelector("#reviewZoomOut").disabled = view.scale <= .25; document.querySelector("#reviewZoomIn").disabled = view.scale >= 4; }
   });
   reviewEngine = activeEngine; reviewEngine.setSmoothing(teacherSmoothing);
-  reviewEngine.setTool(dialog.querySelector("button[data-tool].active")?.dataset.tool || "pen");
-  reviewEngine.setColor(document.querySelector("#reviewColor").value);
+  reviewEngine.setTool(drawingSettings.tool);
+  reviewEngine.setColor(drawingSettings.color);
+  renderToolSelection(dialog, drawingSettings);
   reviewEngine.setWidth(document.querySelector("#reviewWidth").value);
   reviewOffs = [
     subscribeLayer(currentStudent.boardToken, "studentStrokes", { add: (id, stroke) => activeEngine.addStroke("studentStrokes", id, stroke), remove: (id) => activeEngine.removeStroke("studentStrokes", id) }, activePageId),
@@ -298,8 +301,12 @@ async function openReview(student, pageId) {
 function closeReview() { stopReviewPage(); currentStudent = null; currentReviewPageId = null; dialog.close(); render(); requestAnimationFrame(() => window.scrollTo(0, reviewScroll)); }
 document.querySelector("#closeReview").onclick = closeReview;
 dialog.addEventListener("cancel", (event) => { event.preventDefault(); closeReview(); });
-dialog.querySelectorAll("button[data-tool]").forEach((button) => button.onclick = () => { dialog.querySelectorAll("button[data-tool]").forEach((item) => item.classList.remove("active")); button.classList.add("active"); reviewEngine?.setTool(button.dataset.tool); });
-document.querySelector("#reviewColor").oninput = (event) => reviewEngine?.setColor(event.target.value);
+dialog.querySelectorAll("button[data-tool]").forEach((button) => button.onclick = () => {
+  reviewEngine?.finishInput(); drawingSettings.tool = button.dataset.tool;
+  if (button.dataset.penColor) drawingSettings.color = button.dataset.penColor;
+  reviewEngine?.setTool(drawingSettings.tool); reviewEngine?.setColor(drawingSettings.color);
+  renderToolSelection(dialog, drawingSettings);
+});
 document.querySelector("#reviewWidth").onchange = (event) => reviewEngine?.setWidth(event.target.value);
 document.querySelector("#reviewUndo").onclick = () => reviewEngine?.undo(); document.querySelector("#reviewRedo").onclick = () => reviewEngine?.redo(); document.querySelector("#reviewResetZoom").onclick = () => reviewEngine?.resetZoom();
 document.querySelector("#reviewZoomOut").onclick = () => reviewEngine?.zoomBy(-.1);

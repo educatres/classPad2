@@ -1024,6 +1024,41 @@ dialog form {
   background: var(--navy);
   color: #fff;
 }
+.pen-color-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 5px;
+}
+.board-toolbar button.pen-color {
+  flex: 0 0 48px;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+  place-items: center;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--pen-color);
+  color: #fff;
+  box-shadow: 0 0 0 1px #b8c9d1;
+  touch-action: manipulation;
+}
+.board-toolbar button.pen-color::after {
+  content: "✓";
+  font-size: 1.2rem;
+  font-weight: 800;
+  opacity: 0;
+}
+.board-toolbar button.pen-color.active {
+  box-shadow: 0 0 0 3px var(--navy);
+}
+.board-toolbar button.pen-color.active::after { opacity: 1; }
+.board-toolbar button.pen-color:focus-visible {
+  outline: 3px solid #bd6500;
+  outline-offset: 5px;
+}
 .board-toolbar label {
   font-size: 0.72rem;
   min-width: 76px;

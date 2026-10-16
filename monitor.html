@@ -89,15 +89,18 @@
         </nav>
       </div>
       <div class="board-toolbar review-toolbar" role="toolbar" aria-label="老師批注工具">
-        <button data-tool="pen" class="active">✎<span>批注筆</span></button>
-        <button data-tool="eraser">⌫<span>橡皮擦</span></button>
+        <div class="pen-color-group" role="group" aria-label="畫筆顏色">
+          <button type="button" data-tool="pen" data-pen-color="#000000" class="pen-color active" style="--pen-color:#000000" aria-label="黑色畫筆" title="黑色畫筆" aria-pressed="true"></button>
+          <button type="button" data-tool="pen" data-pen-color="#2563eb" class="pen-color" style="--pen-color:#2563eb" aria-label="藍色畫筆" title="藍色畫筆" aria-pressed="false"></button>
+          <button type="button" data-tool="pen" data-pen-color="#16a34a" class="pen-color" style="--pen-color:#16a34a" aria-label="綠色畫筆" title="綠色畫筆" aria-pressed="false"></button>
+        </div>
+        <button data-tool="eraser" aria-pressed="false">⌫<span>橡皮擦</span></button>
         <div class="zoom-controls" role="group" aria-label="白板縮放">
           <button id="reviewZoomOut" type="button" aria-label="縮小白板，每次 10%">− 縮小</button>
           <output id="reviewZoomScale" aria-label="目前白板縮放比例" aria-live="polite">100%</output>
           <button id="reviewZoomIn" type="button" aria-label="放大白板，每次 10%">＋ 放大</button>
           <button id="reviewResetZoom" type="button" aria-label="重設白板縮放為 100%">100%</button>
         </div>
-        <input id="reviewColor" type="color" value="#ef4444" aria-label="批注顏色" />
         <label class="brush-size-tool"
           >筆刷
           <select id="reviewWidth" aria-label="批注粗細">

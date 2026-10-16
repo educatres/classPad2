@@ -9,8 +9,11 @@
   </header>
   <div id="lectureToolbar" class="board-toolbar" role="toolbar" aria-label="老師講解工具" hidden>
     <button id="lecturePdfToggle" class="primary" aria-expanded="false" aria-controls="lecturePdfPanel">PDF 題目派送</button>
-    <button data-tool="pen" class="active" aria-pressed="true">✎ 畫筆</button><button data-tool="pan" aria-pressed="false" aria-label="拖動畫板" title="按住滑鼠左鍵或單指拖動畫板">☝ 拖動</button><button data-tool="eraser" aria-pressed="false">⌫ 整筆橡皮擦</button>
-    <input id="lectureColor" type="color" value="#173f5f" aria-label="畫筆顏色">
+    <div class="pen-color-group" role="group" aria-label="畫筆顏色">
+      <button type="button" data-tool="pen" data-pen-color="#000000" class="pen-color active" style="--pen-color:#000000" aria-label="黑色畫筆" title="黑色畫筆" aria-pressed="true"></button>
+      <button type="button" data-tool="pen" data-pen-color="#2563eb" class="pen-color" style="--pen-color:#2563eb" aria-label="藍色畫筆" title="藍色畫筆" aria-pressed="false"></button>
+      <button type="button" data-tool="pen" data-pen-color="#16a34a" class="pen-color" style="--pen-color:#16a34a" aria-label="綠色畫筆" title="綠色畫筆" aria-pressed="false"></button>
+    </div><button data-tool="pan" aria-pressed="false" aria-label="拖動畫板" title="按住滑鼠左鍵或單指拖動畫板">☝ 拖動</button><button data-tool="eraser" aria-pressed="false">⌫ 整筆橡皮擦</button>
     <label class="brush-size-tool">筆刷<select id="lectureWidth" aria-label="畫筆粗細"><option value="1">極細</option><option value="3">細</option><option value="5" selected>中</option><option value="8">粗</option><option value="12">很粗</option><option value="20">特粗</option><option value="40">40 px</option></select></label>
     <button id="lectureSmoothing" aria-pressed="true">平滑：開</button><button id="lectureUndo">復原</button><button id="lectureRedo">重做</button><button id="lectureClear" class="danger-outline">清除本頁</button>
     <div class="zoom-controls" role="group" aria-label="白板縮放"><button id="lectureZoomOut" aria-label="縮小白板，每次 10%">− 縮小</button><output id="lectureZoomScale">100%</output><button id="lectureZoomIn" aria-label="放大白板，每次 10%">＋ 放大</button><button id="lectureResetZoom" aria-label="重設白板視圖，恢復 100% 並置中">重設視圖</button></div>

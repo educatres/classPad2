@@ -7,6 +7,7 @@ import { watchConnection } from "../firebase/connection.js";
 import { getClassroomExpiresAt } from "../firebase/classroomRepository.js";
 import { watchClassroomLifetime } from "../firebase/classroomLifetime.js";
 import { BoardEngine } from "../canvas/BoardEngine.js";
+import { renderToolSelection } from "../canvas/toolbar.js";
 import { StickyNotesLayer } from "../notes/StickyNotesLayer.js";
 import { StudentTextLayer } from "../text/StudentTextLayer.js";
 import { normalizeBoardPages } from "../whiteboard/pages.js";
@@ -110,13 +111,13 @@ function applyInputMode({ focus = false } = {}) {
   engine?.setEnabled(Boolean(student?.enabled && !expired) && activeMode !== "text");
   textLayer?.setEnabled(enabled);
   textLayer?.setEditing(activeMode === "text");
-  toolbar.querySelectorAll("button[data-tool], button[data-mode]").forEach((button) => { const active = (button.dataset.tool || button.dataset.mode) === activeMode; button.classList.toggle("active", active); button.setAttribute("aria-pressed", String(active)); });
+  renderToolSelection(toolbar, { tool: activeMode, color: drawingSettings.color });
   document.querySelector("#undoBtn").disabled = !enabled || activeMode === "text";
   document.querySelector("#redoBtn").disabled = !enabled || activeMode === "text";
   if (focus && activeMode === "text" && enabled) textLayer?.editor.focus({ preventScroll: true });
 }
 
-function switchInputMode(mode, { focus = false } = {}) {
+function switchInputMode(mode, { focus = false, color } = {}) {
   engine?.finishInput();
   if (activeMode === "text" && mode !== "text") {
     // Submit composition before leaving; keep the local draft until Firebase confirms it.
@@ -124,6 +125,7 @@ function switchInputMode(mode, { focus = false } = {}) {
     textLayer?.editor.blur();
   }
   activeMode = mode;
+  if (mode === "pen" && color) { drawingSettings.color = color; engine?.setColor(color); }
   if (mode !== "text") { drawingSettings.tool = mode; engine?.setTool(mode); }
   applyInputMode({ focus });
 }
@@ -290,9 +292,8 @@ function bindToolbar() {
     renderSmoothingButton();
   };
   renderSmoothingButton();
-  toolbar.querySelectorAll("button[data-tool]").forEach((button) => button.onclick = () => switchInputMode(button.dataset.tool));
+  toolbar.querySelectorAll("button[data-tool]").forEach((button) => button.onclick = () => switchInputMode(button.dataset.tool, { color: button.dataset.penColor }));
   document.querySelector("#textToolBtn").onclick = () => switchInputMode("text", { focus: true });
-  document.querySelector("#colorInput").onchange = (event) => { drawingSettings.color = event.target.value; engine?.setColor(drawingSettings.color); };
   document.querySelector("#widthInput").onchange = (event) => { drawingSettings.width = event.target.value; engine?.setWidth(drawingSettings.width); };
   document.querySelector("#undoBtn").onclick = () => engine?.undo();
   document.querySelector("#redoBtn").onclick = () => engine?.redo();
