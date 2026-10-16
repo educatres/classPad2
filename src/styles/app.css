@@ -800,7 +800,6 @@ dialog form {
 .readonly-layer {
   pointer-events: none;
 }
-#boardStage, #lectureStage { background: #e6edf0; }
 .board-stage[data-tool="pan"], .board-stage[data-tool="pan"] canvas { cursor: grab; }
 .board-stage[data-tool="pan"].panning, .board-stage[data-tool="pan"].panning canvas { cursor: grabbing; }
 .student-text-layer {
