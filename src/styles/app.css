@@ -549,6 +549,9 @@ button:disabled {
   gap: 1rem;
   align-items: end;
 }
+.settings-grid .settings-title {
+  grid-column: 1 / -1;
+}
 label {
   display: grid;
   gap: 0.35rem;
