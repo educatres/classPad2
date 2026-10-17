@@ -72,5 +72,18 @@ export function showBackgroundImage(element, value) {
 }
 
 export function setBackgroundViewport(layer, view) {
-  layer.style.transform = `translate(${view.panX}px, ${view.panY}px) scale(${view.scale})`;
+  const baseScale = Number(view?.baseScale) > 0 ? Number(view.baseScale) : 1;
+  const scale = Number(view?.scale) > 0 ? Number(view.scale) : 1;
+  const originX = Number(view?.originX) || 0;
+  const originY = Number(view?.originY) || 0;
+  const panX = Number(view?.panX) || 0;
+  const panY = Number(view?.panY) || 0;
+  layer.style.inset = "auto";
+  layer.style.left = "0px";
+  layer.style.top = "0px";
+  layer.style.right = "auto";
+  layer.style.bottom = "auto";
+  layer.style.width = `${Number(view?.worldWidth) > 0 ? Number(view.worldWidth) : 1600}px`;
+  layer.style.height = `${Number(view?.worldHeight) > 0 ? Number(view.worldHeight) : 1200}px`;
+  layer.style.transform = `translate(${originX + panX}px, ${originY + panY}px) scale(${baseScale * scale})`;
 }

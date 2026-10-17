@@ -149,6 +149,19 @@ describe("BoardEngine iPad 指標處理", () => {
 });
 
 describe("BoardEngine 拖動畫板", () => {
+  it("寬版顯示視窗仍以 4:3 內部白板換算筆跡座標", () => {
+    const engine = createEngine();
+    engine.worldWidth = 1600; engine.worldHeight = 1200;
+    engine.cssWidth = 1600; engine.cssHeight = 900;
+    engine.baseScale = .75; engine.originX = 200; engine.originY = 0;
+    engine.scale = 2; engine.panX = -100; engine.panY = 50;
+    engine.stage.getBoundingClientRect = () => ({ left: 10, top: 20, width: 1600, height: 900 });
+    const point = pointerEvent(1, "mouse", 1310, 970);
+    expect(engine.coords(point)).toEqual([.5, .5]);
+    engine.onViewChange = vi.fn(); engine.notifyViewChange();
+    expect(engine.onViewChange).toHaveBeenCalledWith(expect.objectContaining({ baseScale: .75, originX: 200, worldWidth: 1600, worldHeight: 1200 }));
+  });
+
   it("滑鼠、單指及 Pencil 拖動只改視圖，保留所有圖層與復原歷史", () => {
     for (const type of ["mouse", "touch", "pen"]) {
       const engine = createEngine(); engine.onComplete = vi.fn(); engine.onRemove = vi.fn(); engine.onViewChange = vi.fn();

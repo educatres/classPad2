@@ -86,8 +86,33 @@ export class StickyNotesLayer {
     container.classList.toggle("editable", editable);
   }
 
-  setViewport({ scale = 1, panX = 0, panY = 0 }) {
-    this.container.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  setViewport({ scale = 1, panX = 0, panY = 0, baseScale = 0, originX = 0, originY = 0, worldWidth = 1600, worldHeight = 1200 } = {}) {
+    const fitScale = Number(baseScale) > 0 ? Number(baseScale) : 1;
+    const inverse = 1 / fitScale;
+    const px = (value) => `${value * inverse}px`;
+    this.container.style.inset = "auto";
+    this.container.style.left = "0px";
+    this.container.style.top = "0px";
+    this.container.style.right = "auto";
+    this.container.style.bottom = "auto";
+    this.container.style.width = `${Number(worldWidth) > 0 ? Number(worldWidth) : 1600}px`;
+    this.container.style.height = `${Number(worldHeight) > 0 ? Number(worldHeight) : 1200}px`;
+    this.container.style.setProperty("--sticky-head-height", px(28));
+    this.container.style.setProperty("--sticky-head-padding", px(2.88));
+    this.container.style.setProperty("--sticky-head-padding-x", px(4));
+    this.container.style.setProperty("--sticky-head-gap", px(4));
+    this.container.style.setProperty("--sticky-head-font-size", px(11.52));
+    this.container.style.setProperty("--sticky-select-width", px(58));
+    this.container.style.setProperty("--sticky-select-padding", px(1.92));
+    this.container.style.setProperty("--sticky-select-font-size", px(10.4));
+    this.container.style.setProperty("--sticky-delete-size", px(24));
+    this.container.style.setProperty("--sticky-delete-font-size", px(16));
+    this.container.style.setProperty("--sticky-input-padding", px(7.2));
+    this.container.style.setProperty("--sticky-input-font-size", px(16));
+    this.container.style.setProperty("--sticky-text-padding", px(8.8));
+    this.container.style.setProperty("--sticky-text-font-size", px(16));
+    this.container.style.setProperty("--sticky-resize-size", px(24));
+    this.container.style.transform = `translate(${Number(originX) + Number(panX)}px, ${Number(originY) + Number(panY)}px) scale(${fitScale * (Number(scale) || 1)})`;
   }
 
   upsert(id, value) {

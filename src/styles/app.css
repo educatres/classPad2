@@ -724,6 +724,8 @@ dialog form {
 }
 .display-page .display-stage {
   width: min(100vw, calc(100dvh * 1.333333));
+  height: auto;
+  aspect-ratio: 4 / 3;
   max-width: 100vw;
   max-height: 100dvh;
   border-radius: 0;
@@ -749,21 +751,27 @@ dialog form {
 .board-shell {
   flex: 1;
   min-height: 0;
-  padding: 0.65rem;
-  display: grid;
-  place-items: center;
+  min-width: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
   container-type: size;
 }
 .board-stage {
   position: relative;
-  aspect-ratio: 4 / 3;
-  width: min(100%, calc((100dvh - 154px) * 1.333333));
-  height: auto;
-  max-height: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
   overflow: hidden;
   background: #fff;
-  border-radius: 14px;
-  box-shadow: var(--shadow);
+  border-radius: 0;
+  box-shadow: none;
   touch-action: none;
   overscroll-behavior: none;
   user-select: none;
@@ -776,12 +784,18 @@ dialog form {
   width: 100%;
   height: 100%;
 }
+.board-shell > .board-message {
+  margin: auto;
+}
 .board-page .board-stage {
-  width: min(100%, calc(100cqh * 4 / 3));
+  width: 100%;
+  height: 100%;
 }
 .background-image-layer {
   position: absolute;
   inset: 0;
+  width: 1600px;
+  height: 1200px;
   transform-origin: 0 0;
   pointer-events: none;
 }
@@ -893,18 +907,18 @@ dialog form {
   --sticky-color: #d9f5cf;
 }
 .sticky-note-head {
-  min-height: 28px;
-  padding: 0.18rem 0.25rem;
+  min-height: var(--sticky-head-height, 28px);
+  padding: var(--sticky-head-padding, 0.18rem) var(--sticky-head-padding-x, 0.25rem);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--sticky-head-gap, 0.25rem);
   background: rgba(255, 255, 255, 0.25);
 }
 .sticky-drag-handle {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-size: 0.72rem;
+  font-size: var(--sticky-head-font-size, 0.72rem);
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -915,42 +929,42 @@ dialog form {
   cursor: grabbing;
 }
 .sticky-color-select {
-  width: 58px;
+  width: var(--sticky-select-width, 58px);
   min-width: 0;
-  padding: 0.12rem;
+  padding: var(--sticky-select-padding, 0.12rem);
   border: 1px solid rgba(64, 55, 31, 0.18);
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.55);
-  font-size: 0.65rem;
+  font-size: var(--sticky-select-font-size, 0.65rem);
 }
 .sticky-delete {
-  min-width: 24px;
-  width: 24px;
-  height: 24px;
+  min-width: var(--sticky-delete-size, 24px);
+  width: var(--sticky-delete-size, 24px);
+  height: var(--sticky-delete-size, 24px);
   padding: 0;
   color: #7c3737;
   background: rgba(255, 255, 255, 0.5);
   border-radius: 50%;
-  font-size: 1rem;
+  font-size: var(--sticky-delete-font-size, 1rem);
 }
 .sticky-note-input {
   flex: 1;
   min-height: 0;
-  padding: 0.45rem;
+  padding: var(--sticky-input-padding, 0.45rem);
   resize: none;
   border: 0;
   outline: 0;
   background: transparent;
   color: inherit;
-  font-size: clamp(0.72rem, 1.6vw, 1rem);
+  font-size: var(--sticky-input-font-size, clamp(0.72rem, 1.6vw, 1rem));
   line-height: 1.35;
   user-select: text;
   -webkit-user-select: text;
 }
 .sticky-note-text {
-  padding: 0.55rem;
+  padding: var(--sticky-text-padding, 0.55rem);
   overflow: hidden;
-  font-size: clamp(0.72rem, 1.6vw, 1rem);
+  font-size: var(--sticky-text-font-size, clamp(0.72rem, 1.6vw, 1rem));
   line-height: 1.35;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
@@ -959,8 +973,8 @@ dialog form {
   position: absolute;
   right: 2px;
   bottom: 0;
-  width: 24px;
-  height: 24px;
+  width: var(--sticky-resize-size, 24px);
+  height: var(--sticky-resize-size, 24px);
   display: grid;
   place-items: end;
   color: rgba(69, 57, 27, 0.55);
@@ -1337,13 +1351,15 @@ dialog form {
 .review-body {
   flex: 1;
   min-height: 0;
-  padding: 0.5rem;
+  min-width: 0;
+  padding: 0;
   display: grid;
-  place-items: center;
+  place-items: stretch;
   container-type: size;
 }
 .review-body .board-stage {
-  width: min(100%, calc(100cqh * 4 / 3));
+  width: 100%;
+  height: 100%;
 }
 .review-toolbar {
   position: relative;
@@ -1556,7 +1572,8 @@ dialog form {
 .lecture-header nav { display: flex; flex-wrap: wrap; }
 .lecture-page .board-toolbar[hidden] { display: none; }
 .lecture-page #lectureMessage { position: relative; max-width: 100%; }
-.lecture-page .board-shell:has(#lectureMessage:not([hidden])) { align-content: start; gap: .5rem; }
+.lecture-page .board-shell:has(#lectureMessage:not([hidden])) { justify-content: flex-start; gap: .5rem; }
+.lecture-page .board-shell:has(#lectureMessage:not([hidden])) > .board-message { margin: 0 auto; }
 .board-toolbar.compact-toolbar {
   min-height: 62px;
   max-width: 100%;

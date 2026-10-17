@@ -72,7 +72,7 @@ export class StudentTextLayer {
     this.onError = onError;
     this.enabled = editable;
     this.editing = false;
-    this.viewport = { scale: 1, panX: 0, panY: 0 };
+    this.viewport = { scale: 1, panX: 0, panY: 0, baseScale: 0, originX: 0, originY: 0 };
     this.composing = false;
     this.dirty = false;
     this.lastSubmitted = { text: "", scrollTop: 0 };
@@ -119,16 +119,23 @@ export class StudentTextLayer {
   }
 
   setViewport(view = {}) {
-    this.viewport = { scale: Number(view.scale) || 1, panX: Number(view.panX) || 0, panY: Number(view.panY) || 0 };
+    this.viewport = {
+      scale: Number(view.scale) || 1,
+      panX: Number(view.panX) || 0,
+      panY: Number(view.panY) || 0,
+      baseScale: Number(view.baseScale) || 0,
+      originX: Number(view.originX) || 0,
+      originY: Number(view.originY) || 0,
+    };
     this.applyViewport();
   }
 
   applyViewport() {
     const width = this.container.getBoundingClientRect().width;
     if (!width) return;
-    const baseScale = width / TEXT_LOGICAL_WIDTH;
-    const { scale, panX, panY } = this.viewport;
-    this.editor.style.transform = `translate(${panX}px, ${panY}px) scale(${baseScale * scale})`;
+    const baseScale = this.viewport.baseScale > 0 ? this.viewport.baseScale : width / TEXT_LOGICAL_WIDTH;
+    const { scale, panX, panY, originX, originY } = this.viewport;
+    this.editor.style.transform = `translate(${originX + panX}px, ${originY + panY}px) scale(${baseScale * scale})`;
   }
 
   setEditing(value) {
