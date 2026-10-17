@@ -13,6 +13,8 @@ import { confirmAction, explainError, toast } from "../utils/ui.js";
 import { param } from "../utils/url.js";
 import { PdfSidebar } from "../pdf/PdfSidebar.js";
 import { PdfSession } from "../pdf/PdfSession.js";
+import { clearBackgroundImage, setBackgroundViewport, showBackgroundImage } from "../whiteboard/backgroundImage.js";
+import { materialCache } from "../whiteboard/materialCache.js";
 
 const $ = (id) => document.getElementById(id), classId = param("class"), histories = new Map();
 let user, classroom, engine, pages = [], pageId, pageOff, pagesOff, classOff, expiryOff, expirationRetryTimer, busy = false, stopped = false, online = false, fatal = false;
@@ -44,6 +46,7 @@ async function openPdfPanel() {
   finally { openingPdf = false; }
 }
 $("lecturePdfToggle").onclick = openPdfPanel;
+$("lectureBackgroundImage").addEventListener("error", () => toast("講解題目載入失敗，請確認網路連線後重試。", "error"));
 
 function renderSync() {
   badge.textContent = queue.error ? "同步失敗，尚未保存" : !online ? "離線" : queue.pending || busy ? "同步中" : engine ? "已同步" : "準備中";
@@ -77,11 +80,12 @@ function renderPages() {
 function openPage(id) {
   if (stopped || fatal || !pages.some((page) => page.id === id)) return;
   if (engine) histories.set(pageId, { undo: engine.undoStack, redo: engine.redoStack });
+  clearBackgroundImage($("lectureBackgroundImage"));
   pageOff?.(); engine?.destroy(); pageId = id; stage.hidden = false; message.hidden = true; toolbar.hidden = false;
   const current = new BoardEngine({ stage, backgroundCanvas: $("lectureBackground"), studentCanvas: $("lectureStudent"), teacherCanvas: $("lectureTeacher"), editableLayer: "teacherStrokes", uid: user.uid,
     onComplete: (stroke) => queue.enqueue(stroke.id, () => writeLectureStroke(classId, id, stroke.id, { ...stroke, authorUid: user.uid })),
     onRemove: (strokeId) => queue.enqueue(strokeId, () => writeLectureStroke(classId, id, strokeId, null)),
-    onViewChange: (view) => { $("lectureZoomScale").textContent = `${Math.round(view.scale * 100)}%`; $("lectureZoomOut").disabled = view.scale <= .25; $("lectureZoomIn").disabled = view.scale >= 4; }
+    onViewChange: (view) => { setBackgroundViewport($("lectureBackgroundLayer"), view); $("lectureZoomScale").textContent = `${Math.round(view.scale * 100)}%`; $("lectureZoomOut").disabled = view.scale <= .25; $("lectureZoomIn").disabled = view.scale >= 4; }
   });
   engine = current;
   current.undoStack = histories.get(id)?.undo || []; current.redoStack = histories.get(id)?.redo || [];
@@ -93,6 +97,7 @@ function openPage(id) {
     add: (strokeId, stroke) => { if (!queue.touches(strokeId)) current.addStroke("teacherStrokes", strokeId, stroke); },
     remove: (strokeId) => { if (!queue.touches(strokeId)) current.removeStroke("teacherStrokes", strokeId); }
   }, fail);
+  showBackgroundImage($("lectureBackgroundImage"), pages.find((page) => page.id === id)?.backgroundImage);
   renderPages(); renderSync();
   if (requestedPdf) { requestedPdf = false; openPdfPanel(); }
 }
@@ -130,6 +135,7 @@ async function init() {
       pages = value;
       if (!engine && pages.length) openPage(pages[0].id);
       else if (engine && !pages.some((page) => page.id === pageId)) fail(new Error("目前講解頁已被移除，請重新整理。"));
+      if (engine && !fatal) showBackgroundImage($("lectureBackgroundImage"), pages.find((page) => page.id === pageId)?.backgroundImage);
       renderPages();
     }, fail);
   } catch (error) { fail(error); }
@@ -168,6 +174,6 @@ document.querySelectorAll("a").forEach((link) => link.addEventListener("click", 
 }));
 addEventListener("beforeunload", (event) => { finishInput(); if (queue.pending || busy || pdfPanel?.hasPending) { event.preventDefault(); event.returnValue = "仍有講解內容或 PDF 派送尚未確認。"; } });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") finishInput(); });
-addEventListener("pagehide", () => { finishInput(); stopped = true; clearTimeout(expirationRetryTimer); pageOff?.(); pagesOff?.(); classOff?.(); expiryOff?.(); onlineOff(); connectionOff(); engine?.destroy(); pdfSidebar.destroy(); pdfPanel?.destroy(); });
+addEventListener("pagehide", () => { finishInput(); stopped = true; clearTimeout(expirationRetryTimer); pageOff?.(); pagesOff?.(); classOff?.(); expiryOff?.(); onlineOff(); connectionOff(); engine?.destroy(); clearBackgroundImage($("lectureBackgroundImage")); materialCache.clear(classId); pdfSidebar.destroy(); pdfPanel?.destroy(); });
 addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 init();

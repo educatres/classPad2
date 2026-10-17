@@ -9,7 +9,7 @@ function makePanel() {
   const capture = { width: 1600, height: 800 }, placement = { scale: .65, x: .4, y: .5 };
   return Object.assign(Object.create(PdfCapturePanel.prototype), {
     classId: "test-class", uid: "teacher", online: true, visible: true, sequence: 0,
-    capture, editor: { value: placement }, isActive: () => true, controls: vi.fn(), message: vi.fn(), setBrowsing: vi.fn(), setZoomMenu: vi.fn(), onSuccess: vi.fn(),
+    capture, editor: { value: placement }, isActive: () => true, controls: vi.fn(), message: vi.fn(), setBrowsing: vi.fn(), setZoomMenu: vi.fn(), setHelpMenu: vi.fn(), onSuccess: vi.fn(),
     dialog: { open: true, close: vi.fn(), showModal: vi.fn() }, viewer: { setVisible: vi.fn() }, $: () => ({}),
     clearCapture: vi.fn(function () { this.capture = this.operation = null; })
   });
@@ -17,7 +17,7 @@ function makePanel() {
 
 beforeEach(() => {
   vi.clearAllMocks(); mocks.createCaptureDispatch.mockImplementation(() => ({ pageId: "page_STABLE1" }));
-  mocks.dispatchCapture.mockResolvedValue({ pageId: "page_STABLE1", classroom: { boardPages: { main: { id: "main", order: 0 }, page_STABLE1: { id: "page_STABLE1", order: 1 } } } });
+  mocks.dispatchCapture.mockResolvedValue({ pageId: "page_STABLE1", lecturePageNumber: 5, classroom: { boardPages: { main: { id: "main", order: 0 }, page_STABLE1: { id: "page_STABLE1", order: 1 } } } });
 });
 
 function makeLoadPanel() {
@@ -78,6 +78,7 @@ describe("PDF 面板派送狀態", () => {
     expect(mocks.dispatchCapture.mock.calls.map((call) => call[1])).toEqual([operation, operation]);
     expect(panel.clearCapture).toHaveBeenCalledOnce(); expect(panel.hasPending).toBe(false);
     expect(panel.message).toHaveBeenLastCalledWith(expect.stringContaining("學生第 2 頁"));
+    expect(panel.message).toHaveBeenLastCalledWith(expect.stringContaining("老師講解第 5 頁"));
   });
   it("離線或失去有效課堂權限時不建立派送操作", async () => {
     const panel = makePanel(); panel.online = false; await panel.dispatch();

@@ -6,22 +6,35 @@ import { buildCaptureDispatch, createCaptureDispatch, dispatchCapture } from "..
 import { reconcileClassBoardPages } from "../src/firebase/pageRepository.js";
 
 const uid = "teacher", classId = "class-1", capture = { mimeType: "image/jpeg", base64: "YWJj", width: 3, height: 2, byteLength: 3 };
-let data, classroom;
+let data, classroom, lectureBoard;
 beforeEach(() => {
   vi.clearAllMocks();
   classroom = { createdAt: Date.now(), expiresAt: Date.now() + 36000000, status: "active", admins: { teacher: true }, studentOrder: {}, boardPages: { main: { id: "main", order: 0, createdAt: 1, createdBy: uid }, page_OLDOLD: { id: "page_OLDOLD", order: 8, createdAt: 2, createdBy: uid } } };
   data = { ".info/connected": true, [`classes/${classId}`]: classroom };
-  mock.get.mockImplementation(async (path) => ({ val: () => path.startsWith(`classes/${classId}/boardPages/`) ? classroom.boardPages[path.split("/").at(-1)] || null : data[path] || null }));
+  lectureBoard = { meta: { createdAt: 1, updatedAt: 1 }, pageIndex: { page_initial: { id: "page_initial", order: 0, createdAt: 1, createdBy: uid }, page_EXPLAIN: { id: "page_EXPLAIN", order: 15, createdAt: 2, createdBy: uid } } };
+  mock.get.mockImplementation(async (path) => ({ val: () => {
+    if (path.startsWith(`classes/${classId}/boardPages/`)) return classroom.boardPages[path.split("/").at(-1)] || null;
+    if (path === `lectureBoards/${classId}/pageIndex`) return lectureBoard.pageIndex || null;
+    if (path === `lectureBoards/${classId}/meta`) return lectureBoard.meta || null;
+    if (path.startsWith(`lectureBoards/${classId}/pageIndex/`)) return lectureBoard.pageIndex?.[path.split("/").at(-1)] || null;
+    return data[path] || null;
+  } }));
   mock.onValue.mockImplementation((path, callback) => { callback({ val: () => data[path] }); return () => {}; });
-  mock.update.mockImplementation(async (_root, changes) => { for (const [path, value] of Object.entries(changes)) { data[path] = value; if (path.startsWith(`classes/${classId}/boardPages/`)) classroom.boardPages[path.split("/").at(-1)] = value; } });
+  mock.update.mockImplementation(async (_root, changes) => { for (const [path, value] of Object.entries(changes)) {
+    data[path] = value;
+    if (path.startsWith(`classes/${classId}/boardPages/`)) classroom.boardPages[path.split("/").at(-1)] = value;
+    if (path.startsWith(`lectureBoards/${classId}/pageIndex/`)) (lectureBoard.pageIndex ||= {})[path.split("/").at(-1)] = value;
+    if (path.startsWith(`lectureBoards/${classId}/meta/`)) (lectureBoard.meta ||= {})[path.split("/").at(-1)] = value;
+  } });
 });
 describe("教材派送", () => {
   it("80 人只存一份圖片，新增頁面葉節點，既有內容不變", () => {
     const operation = createCaptureDispatch(capture, uid), students = Array.from({ length: 80 }, (_, i) => ({ boardToken: `token${i}` }));
-    const changes = buildCaptureDispatch(classId, classroom, students, operation);
-    expect(Object.keys(changes)).toHaveLength(83);
+    const changes = buildCaptureDispatch(classId, classroom, students, operation, lectureBoard);
+    expect(Object.keys(changes)).toHaveLength(85);
     expect(JSON.stringify(changes).split('"base64"')).toHaveLength(2);
     expect(changes[`classes/${classId}/boardPages/${operation.pageId}`].order).toBe(9);
+    expect(changes[`lectureBoards/${classId}/pageIndex/${operation.pageId}`].order).toBe(16);
     expect(Object.keys(changes).some((path) => path.includes("Strokes") || path.endsWith("/main"))).toBe(false);
   });
   it("零學生可派送；同時連點與已提交操作重試不產生第二頁", async () => {
@@ -31,6 +44,7 @@ describe("教材派送", () => {
     await dispatchCapture(classId, operation, uid);
     expect(mock.update).toHaveBeenCalledOnce();
     expect(classroom.boardPages[operation.pageId].backgroundImage.assetId).toBe(operation.pageId);
+    expect(lectureBoard.pageIndex[operation.pageId].backgroundImage.assetId).toBe(operation.pageId);
   });
   it("派送前鎖定版面，課堂及每位學生頁面使用同一大小位置，不改動 JPEG", async () => {
     const placement = { scale: .5375, x: .32, y: .41 }, operation = createCaptureDispatch(capture, uid, placement);
@@ -41,6 +55,8 @@ describe("教材派送", () => {
     const pagePath = `classes/${classId}/boardPages/${operation.pageId}`, studentPath = `boardPages/student-token/${operation.pageId}`;
     expect(data[pagePath].backgroundImage).toMatchObject({ scale: .5375, x: .32, y: .41 });
     expect(data[studentPath]).toEqual(data[pagePath]);
+    expect(lectureBoard.pageIndex[operation.pageId]).toEqual({ ...data[pagePath], order: 16 });
+    expect(lectureBoard.meta.createdAt).toBe(1);
     expect(data[`classMaterials/${classId}/${operation.pageId}`].base64).toBe(capture.base64);
   });
   it("寫入回應遺失時讀回同 ID，避免重寫 immutable 資產", async () => {
@@ -50,6 +66,26 @@ describe("教材派送", () => {
     await expect(dispatchCapture(classId, operation, uid)).resolves.toMatchObject({ pageId: operation.pageId });
     expect(mock.update).toHaveBeenCalledOnce();
     expect(classroom.boardPages[operation.pageId].backgroundImage).toMatchObject({ scale: .63, x: .35, y: .42 });
+    expect(lectureBoard.pageIndex[operation.pageId].backgroundImage).toEqual(classroom.boardPages[operation.pageId].backgroundImage);
+  });
+  it("尚無講解白板時，在同一次派送初始化空白首頁及題目頁", async () => {
+    lectureBoard = {};
+    const operation = createCaptureDispatch(capture, uid);
+    const result = await dispatchCapture(classId, operation, uid);
+    expect(mock.update).toHaveBeenCalledOnce();
+    expect(lectureBoard.pageIndex.page_initial).toMatchObject({ id: "page_initial", order: 0 });
+    expect(lectureBoard.pageIndex[operation.pageId].order).toBe(1);
+    expect(result.lecturePageNumber).toBe(2);
+    expect(lectureBoard.meta.createdAt).toBe(operation.asset.createdAt);
+  });
+  it("讀回只存在單邊或講解版面不一致時拒絕當成成功，不覆寫既有資料", async () => {
+    const operation = createCaptureDispatch(capture, uid);
+    await dispatchCapture(classId, operation, uid);
+    delete lectureBoard.pageIndex[operation.pageId];
+    await expect(dispatchCapture(classId, operation, uid)).rejects.toThrow("派送資料不一致");
+    lectureBoard.pageIndex[operation.pageId] = { ...classroom.boardPages[operation.pageId], backgroundImage: { ...classroom.boardPages[operation.pageId].backgroundImage, scale: .3 } };
+    await expect(dispatchCapture(classId, operation, uid)).rejects.toThrow("派送資料不一致");
+    expect(mock.update).toHaveBeenCalledOnce();
   });
   it("離線、課堂關閉與滿 20 張時拒絕派送", async () => {
     const operation = createCaptureDispatch(capture, uid); data[".info/connected"] = false;
@@ -74,6 +110,7 @@ describe("教材派送", () => {
     const persist = mock.update.getMockImplementation(), operation = createCaptureDispatch(capture, uid);
     mock.update.mockImplementationOnce(async () => {
       classroom.boardPages.page_PEER12 = { id: "page_PEER12", order: 9, createdAt: 3, createdBy: uid };
+      lectureBoard.pageIndex.page_PEER12 = { id: "page_PEER12", order: 16, createdAt: 3, createdBy: uid };
       data["students/s1"].boardToken = "new-token";
       data["boardPages/new-token"] = classroom.boardPages;
       throw new Error("PERMISSION_DENIED");
@@ -82,6 +119,8 @@ describe("教材派送", () => {
     expect(mock.update).toHaveBeenCalledTimes(2);
     const first = mock.update.mock.calls[0][1], retry = mock.update.mock.calls[1][1], path = `classes/${classId}/boardPages/${operation.pageId}`;
     expect(first[path].order).toBe(9); expect(retry[path].order).toBe(10);
+    expect(first[`lectureBoards/${classId}/pageIndex/${operation.pageId}`].order).toBe(16);
+    expect(retry[`lectureBoards/${classId}/pageIndex/${operation.pageId}`].order).toBe(17);
     expect(retry[`boardPages/new-token/${operation.pageId}`]).toBeDefined(); expect(retry[`boardPages/old-token/${operation.pageId}`]).toBeUndefined();
     expect(retry[`classMaterials/${classId}/${operation.pageId}`]).toEqual(first[`classMaterials/${classId}/${operation.pageId}`]);
   });

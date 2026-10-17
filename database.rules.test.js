@@ -171,19 +171,26 @@ describe("PDF 截圖教材權限", () => {
       [`classes/${capClass}`]: { title: "教材測試", createdAt: now, expiresAt: now + 36000000, updatedAt: now, status: "active", admins: { "capture-teacher": true }, studentOrder: { [capStudent]: 0 }, boardPages: { main } },
       [`students/${capStudent}`]: { classId: capClass, boardToken: capBoard, studentUid: "capture-student", enabled: true, locked: false, seatNumber: "1", displayName: "學生", createdAt: now, updatedAt: now },
       [`boardLookup/${capBoard}`]: { classId: capClass, studentId: capStudent },
+      [`lectureBoards/${capClass}`]: { meta: { createdAt: now, updatedAt: now }, pageIndex: { page_initial: { ...main, id: "page_initial" } } },
       [`boardPages/${capBoard}`]: { main }
     }));
   });
-  const send = () => assertSucceeds(update(ref(teacher), {
+  const dispatchChanges = () => ({
     [`classMaterials/${capClass}/${assetId}`]: asset,
     [`classes/${capClass}/boardPages/${assetId}`]: page,
     [`boardPages/${capBoard}/${assetId}`]: page,
+    [`lectureBoards/${capClass}/pageIndex/${assetId}`]: page,
+    [`lectureBoards/${capClass}/meta/updatedAt`]: now,
     [`classes/${capClass}/updatedAt`]: now
-  }));
+  });
+  const send = () => assertSucceeds(update(ref(teacher), dispatchChanges()));
   const bindSession = () => set(ref(studentDb, `classMaterialSessions/${capClass}/capture-student`), { studentId: capStudent, boardToken: capBoard });
   it("首次原子派送成功，只有老師及有效綁定且有該頁參照的學生可讀單張", async () => {
     await send(); await assertSucceeds(bindSession());
     await assertSucceeds(get(ref(teacher, `classMaterials/${capClass}/${assetId}`)));
+    expect((await get(ref(teacher, `lectureBoards/${capClass}/pageIndex/${assetId}`))).val()).toEqual(page);
+    await assertFails(get(ref(studentDb, `lectureBoards/${capClass}`)));
+    await assertFails(set(ref(studentDb, `lectureBoards/${capClass}/pageIndex/${assetId}`), page));
     await assertSucceeds(get(ref(studentDb, `classMaterials/${capClass}/${assetId}`)));
     await assertFails(get(ref(stranger, `classMaterials/${capClass}/${assetId}`)));
     await assertFails(get(ref(env.authenticatedContext("teacher").database(), `classMaterials/${capClass}/${assetId}`)));
@@ -192,6 +199,25 @@ describe("PDF 截圖教材權限", () => {
     await assertFails(set(ref(studentDb, `classMaterials/${capClass}/${otherId}`), { ...asset, createdBy: "capture-student" }));
     await assertSucceeds(set(ref(teacher, `classMaterials/${capClass}/${otherId}`), asset));
     await assertFails(get(ref(studentDb, `classMaterials/${capClass}/${otherId}`)));
+  });
+  it("講解頁驗證失敗時整筆派送回滾，修正後兩端同時新增且保留原內容", async () => {
+    const path = `lectureBoards/${capClass}/pageIndex/${assetId}`, changes = dispatchChanges();
+    await assertFails(update(ref(teacher), { ...changes, [path]: { ...page, backgroundImage: { ...page.backgroundImage, classId: "another-class" } } }));
+    for (const absent of [`classMaterials/${capClass}/${assetId}`, `classes/${capClass}/boardPages/${assetId}`, `boardPages/${capBoard}/${assetId}`, path]) {
+      expect((await get(ref(teacher, absent))).exists()).toBe(false);
+    }
+    await send();
+    expect((await get(ref(teacher, `lectureBoards/${capClass}/pageIndex/page_initial`))).exists()).toBe(true);
+    expect((await get(ref(teacher, `boardPages/${capBoard}/main`))).exists()).toBe(true);
+  });
+  it("講解底圖拒絕跨班、錯誤資產、外部網址、非法版面及覆蓋既有空白頁", async () => {
+    const path = `lectureBoards/${capClass}/pageIndex/${assetId}`;
+    for (const fields of [{ classId: "another-class" }, { assetId: otherId }, { sourceUrl: "https://example.com/a.jpg" }, { scale: 2 }, { x: -1 }, { y: 1.1 }]) {
+      await assertFails(set(ref(teacher, path), { ...page, backgroundImage: { ...page.backgroundImage, ...fields } }));
+    }
+    await assertFails(set(ref(teacher, `lectureBoards/${capClass}/pageIndex/page_initial/backgroundImage`), { ...page.backgroundImage, assetId: "page_initial" }));
+    await assertSucceeds(set(ref(teacher, path), { id: assetId, order: 1, createdAt: now, createdBy: "capture-teacher" }));
+    await assertFails(set(ref(teacher, path), page));
   });
   it("拒絕偽造 session、他人 session 與額外欄位，只能刪自己的 session", async () => {
     const session = { studentId: capStudent, boardToken: capBoard };
@@ -230,9 +256,11 @@ describe("PDF 截圖教材權限", () => {
     await assertFails(update(ref(teacher, `classMaterials/${capClass}/${assetId}`), { width: 20 }));
     await assertFails(set(ref(teacher, `classMaterials/${capClass}`), { [assetId]: { ...asset, createdBy: "other" } }));
     await assertFails(set(ref(teacher, `classMaterials/${capClass}`), { [assetId]: { ...asset, base64: "AAAA" } }));
-    for (const path of [`classes/${capClass}/boardPages/${assetId}/backgroundImage`, `boardPages/${capBoard}/${assetId}/backgroundImage`]) {
+    for (const path of [`classes/${capClass}/boardPages/${assetId}/backgroundImage`, `boardPages/${capBoard}/${assetId}/backgroundImage`, `lectureBoards/${capClass}/pageIndex/${assetId}/backgroundImage`]) {
       for (const changes of [{ scale: .8 }, { x: .3 }, { y: .4 }]) await assertFails(update(ref(teacher, path), changes));
     }
+    await assertFails(set(ref(teacher, `lectureBoards/${capClass}/pageIndex/${assetId}/backgroundImage`), null));
+    await assertFails(set(ref(teacher, `lectureBoards/${capClass}/pageIndex/${assetId}`), { ...page, backgroundImage: { ...page.backgroundImage, x: .1 } }));
     await assertFails(set(ref(teacher, `classes/${capClass}/boardPages/${assetId}/backgroundImage`), { sourceUrl: "https://drive.google.com/a", imageUrl: "https://drive.google.com/thumbnail?id=abcdefghij&sz=w2000", scale: 1, updatedAt: now, updatedBy: "capture-teacher" }));
   });
   it("展示僅可讀取合法目前投影頁，切頁及取消投影立即撤權", async () => {

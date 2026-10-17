@@ -10,7 +10,7 @@
 
 * [白板拖動工具驗證紀錄](BOARD_PAN_VALIDATION.md)：老師講解與學生白板在畫筆旁提供手指拖動工具，支援滑鼠、單指及觸控筆；只改變本機視圖，沿用原有資料路徑與 Firebase 權限。
 
-* [講解白板 PDF 面板驗證紀錄](PDF_LECTURE_PANEL_VALIDATION.md)：PDF 派送已整合至講解頁左側，可隱藏、調整寬度及連續閱讀所有頁面；側欄工具列採單排、圖示及兩字標籤，縮放設定與說明按需展開，窄面板可水平滑動。沿用學生教材派送資料與權限，不將 PDF 加入講解白板底圖。
+* [講解白板 PDF 面板驗證紀錄](PDF_LECTURE_PANEL_VALIDATION.md)：PDF 派送整合至講解頁左側，可隱藏、調整寬度及連續閱讀所有頁面；側欄移除標題列，隱藏、說明、載入及截圖操作合併為單排，窄面板可水平滑動。每次派送以同一筆原子更新，在學生及老師講解白板各自末尾新增題目頁，兩端共用 JPEG 與版面，保留目前頁面及既有內容。講解底圖參照保存於 `lectureBoards/{classId}/pageIndex/{pageId}/backgroundImage`，筆跡維持獨立；需部署更新後的 Firebase Rules。
 
 * PDF 閱讀狀態：同一分頁切換老師功能、隱藏側欄與重新整理，保留原 PDF、縮放及雙向捲動位置，直到成功更換檔案或正常關閉分頁。加密原檔只暫存在本機 IndexedDB，金鑰與閱讀狀態使用 sessionStorage，不增加 Firebase 路徑或權限。
 

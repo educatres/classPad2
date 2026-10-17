@@ -5,7 +5,7 @@ export class CapturePlacementEditor {
   constructor(container, onBack) {
     this.container = container;
     container.innerHTML = `<div class="pdf-layout-heading"><h3>調整白板版面</h3><button data-layout-back type="button">返回 PDF 重新框選</button></div>
-      <p class="muted">拖曳圖片調整位置，拉動右下角調整大小。白板外的部分不會顯示；學生將看到相同版面。</p>
+      <p class="muted">拖曳圖片調整位置，拉動右下角調整大小。白板外的部分不會顯示；學生與老師講解頁使用相同版面。</p>
       <div class="pdf-layout-content"><div class="pdf-layout-board" aria-label="學生白板版面預覽，比例 4 比 3">
         <div class="pdf-layout-frame" tabindex="0" role="group" aria-label="截圖位置，可用方向鍵移動">
           <img data-preview alt="截圖白板版面預覽" draggable="false">

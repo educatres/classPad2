@@ -15,13 +15,11 @@ export class PdfCapturePanel {
   constructor(container, { classId, uid, isActive, onHide, onSuccess, session }) {
     Object.assign(this, { container, classId, uid, isActive, onSuccess, session });
     this.sequence = 0; this.visible = true;
-    container.innerHTML = `<div class="pdf-panel-head"><h2>PDF 題目派送</h2><div class="pdf-head-actions"><details class="pdf-help"><summary aria-label="PDF 操作說明" title="PDF 操作說明">ⓘ</summary><div class="pdf-help-content">
-      <p>PDF 僅在本機開啟；同一分頁切換功能、隱藏面板或重新整理後保留 PDF 與閱讀位置，關閉分頁後需重新選檔。每課堂最多派送 20 張。</p>
-      <p data-mode>上下滑動閱讀所有頁面；要擷取題目時請切換「框選」。</p><p>窄面板可左右滑動工具列；點縮放比例可放大、縮小或符合寬度。</p></div></details><button data-hide type="button" aria-label="隱藏 PDF 面板" title="隱藏 PDF 面板">隱藏</button></div></div>
-      <div class="pdf-panel-tools"><div class="pdf-toolbar" role="group" aria-label="PDF 閱讀與截圖工具"><button data-open type="button" class="primary" aria-label="載入 PDF" title="載入 PDF">載入</button><input type="file" accept=".pdf,application/pdf" hidden>
+    container.innerHTML = `<div class="pdf-panel-tools"><div class="pdf-toolbar" role="group" aria-label="PDF 閱讀與截圖工具，可左右滑動" tabindex="0"><button data-hide type="button" class="pdf-icon-tool" aria-label="隱藏 PDF 面板" title="隱藏 PDF 面板">‹</button><button data-help-toggle type="button" class="pdf-icon-tool" aria-label="PDF 操作說明" title="PDF 操作說明" aria-expanded="false" aria-controls="pdfHelpContent">ⓘ</button><button data-open type="button" class="primary" aria-label="載入 PDF" title="載入 PDF">載入</button><input type="file" accept=".pdf,application/pdf" hidden>
         <div class="pdf-page-controls"><label class="pdf-page-jump"><input data-jump type="number" min="1" value="1" inputmode="numeric" aria-label="跳至 PDF 頁碼" title="輸入 PDF 頁碼，按 Enter 或右箭頭跳頁"><span data-count>／0</span></label><button data-go type="button" class="pdf-icon-tool" aria-label="跳至指定 PDF 頁碼" title="跳至指定 PDF 頁碼">→</button></div>
         <button data-zoom-toggle type="button" aria-label="調整 PDF 縮放，目前 100%" title="調整 PDF 縮放，目前 100%" aria-expanded="false" aria-controls="pdfZoomMenu">100%</button>
         <button data-browse type="button" title="瀏覽 PDF，可上下捲動" aria-pressed="true">瀏覽</button><button data-select type="button" aria-label="框選 PDF 截圖" title="框選 PDF 截圖" aria-pressed="false">框選</button><button data-all type="button" aria-label="截取目前 PDF 整頁" title="截取目前 PDF 整頁">整頁</button></div>
+        <div id="pdfHelpContent" class="pdf-help-content" hidden><p>PDF 僅在本機開啟；同一分頁切換功能、隱藏面板或重新整理後保留 PDF 與閱讀位置，關閉分頁後需重新選檔。每課堂最多派送 20 張。</p><p>派送會在學生與老師講解白板末尾各新增一頁，保留目前頁面與既有筆跡。</p><p data-mode>上下滑動閱讀所有頁面；要擷取題目時請切換「框選」。</p><p>窄面板可左右滑動工具列；點縮放比例可放大、縮小或符合寬度。</p></div>
         <div id="pdfZoomMenu" class="pdf-zoom-menu" role="group" aria-label="PDF 縮放設定" hidden><button data-out type="button" class="pdf-icon-tool" aria-label="縮小 PDF" title="縮小 PDF">−</button><output data-zoom aria-label="PDF 縮放比例">100%</output><button data-in type="button" class="pdf-icon-tool" aria-label="放大 PDF" title="放大 PDF">＋</button><button data-fit type="button" aria-label="PDF 符合寬度" title="PDF 符合寬度">符合</button></div></div>
       <div class="pdf-continuous-scroll" tabindex="0" aria-label="PDF 連續頁面，可上下捲動"><p data-empty class="pdf-empty">載入 PDF 後，可上下滑動查看每一頁。</p></div>
       <div class="pdf-panel-footer"><p data-status role="status" aria-live="polite"></p><button data-preview type="button" class="primary" disabled>檢視截圖與派送</button></div>`;
@@ -29,7 +27,7 @@ export class PdfCapturePanel {
     this.dialog = document.createElement("dialog"); this.dialog.className = "pdf-dialog pdf-dispatch-dialog";
     this.dialog.setAttribute("aria-labelledby", "pdfPreviewTitle");
     this.dialog.innerHTML = `<div class="dialog-head"><h2 id="pdfPreviewTitle">派送題目預覽</h2><button data-later type="button">稍後派送</button></div><section data-layout class="pdf-layout" hidden></section>
-      <p data-size></p><p data-status role="status" aria-live="polite"></p><div class="dialog-actions"><button data-discard type="button">取消截圖</button><button data-dispatch type="button" class="primary" disabled>派送為新白板</button></div>`;
+      <p>派送後，在學生與老師講解白板末尾各新增一頁，保留目前頁面與既有內容。</p><p data-size></p><p data-status role="status" aria-live="polite"></p><div class="dialog-actions"><button data-discard type="button">取消截圖</button><button data-dispatch type="button" class="primary" disabled>派送為新白板</button></div>`;
     document.body.append(this.dialog);
     this.$$ = (selector) => this.dialog.querySelector(selector);
     this.editor = new CapturePlacementEditor(this.$$('[data-layout]'), () => { this.clearCapture(); this.setBrowsing(false); this.message("請重新框選題目範圍，或截取目前整頁。"); });
@@ -46,13 +44,14 @@ export class PdfCapturePanel {
     this.$("[data-in]").onclick = () => this.zoom(this.viewer.zoom + .25);
     this.$("[data-fit]").onclick = () => this.zoom(1);
     this.$("[data-zoom-toggle]").onclick = () => this.setZoomMenu(this.$(".pdf-zoom-menu").hidden);
+    this.$("[data-help-toggle]").onclick = () => this.setHelpMenu(this.$(".pdf-help-content").hidden);
     this.$("[data-browse]").onclick = () => this.setBrowsing(true);
     this.$("[data-select]").onclick = () => this.setBrowsing(false);
     this.$("[data-all]").onclick = () => this.viewer.selectAll();
     this.$("[data-preview]").onclick = () => this.showPreview();
     this.$$("[data-later]").onclick = () => this.dialog.close();
     this.$$("[data-discard]").onclick = () => {
-      if (this.operation && !confirm("派送結果尚未確認。取消只會清除本機截圖，不會撤回已建立的學生頁面。請先查看學生頁面，確定仍要取消？")) return;
+      if (this.operation && !confirm("派送結果尚未確認。取消只會清除本機截圖，不會撤回已建立的學生與講解頁面。請先查看兩邊頁面，確定仍要取消？")) return;
       this.clearCapture(); this.message("已取消本機截圖，可繼續閱讀 PDF。");
     };
     this.$$("[data-dispatch]").onclick = () => this.dispatch();
@@ -66,15 +65,15 @@ export class PdfCapturePanel {
     this.visibilityListener = () => { if (document.visibilityState === "hidden") this.remember(); };
     document.addEventListener("visibilitychange", this.visibilityListener);
     this.outsideToolsListener = (event) => {
-      if (!this.$(".pdf-panel-tools").contains(event.target)) this.setZoomMenu(false);
-      if (!this.$(".pdf-help").contains(event.target)) this.$(".pdf-help").open = false;
+      if (!this.$(".pdf-zoom-menu").contains(event.target) && !this.$("[data-zoom-toggle]").contains(event.target)) this.setZoomMenu(false);
+      if (!this.$(".pdf-help-content").contains(event.target) && !this.$("[data-help-toggle]").contains(event.target)) this.setHelpMenu(false);
     };
     this.toolsKeyListener = (event) => {
       if (event.key !== "Escape") return;
-      const zoomOpen = !this.$(".pdf-zoom-menu").hidden, help = this.$(".pdf-help");
-      if (!zoomOpen && !help.open) return;
-      event.preventDefault(); event.stopPropagation(); this.setZoomMenu(false); help.open = false;
-      (zoomOpen ? this.$("[data-zoom-toggle]") : help.querySelector("summary")).focus();
+      const zoomOpen = !this.$(".pdf-zoom-menu").hidden, helpOpen = !this.$(".pdf-help-content").hidden;
+      if (!zoomOpen && !helpOpen) return;
+      event.preventDefault(); event.stopPropagation(); this.setZoomMenu(false); this.setHelpMenu(false);
+      this.$(zoomOpen ? "[data-zoom-toggle]" : "[data-help-toggle]").focus();
     };
     document.addEventListener("pointerdown", this.outsideToolsListener);
     container.addEventListener("keydown", this.toolsKeyListener);
@@ -116,11 +115,16 @@ export class PdfCapturePanel {
   setZoomMenu(value) {
     this.$(".pdf-zoom-menu").hidden = !value;
     this.$("[data-zoom-toggle]").setAttribute("aria-expanded", String(value));
-    if (value) this.$(".pdf-help").open = false;
+    if (value) this.setHelpMenu(false);
+  }
+  setHelpMenu(value) {
+    this.$(".pdf-help-content").hidden = !value;
+    this.$("[data-help-toggle]").setAttribute("aria-expanded", String(value));
+    if (value) this.setZoomMenu(false);
   }
   setVisible(value) {
     this.visible = value; this.viewer.setVisible(value); this.remember();
-    if (!value) { this.setZoomMenu(false); this.$(".pdf-help").open = false; if (this.dialog.open) this.dialog.close(); }
+    if (!value) { this.setZoomMenu(false); this.setHelpMenu(false); if (this.dialog.open) this.dialog.close(); }
   }
   get hasPending() { return Boolean(this.busy || this.restoring || this.capture || this.sending || this.operation); }
 
@@ -238,7 +242,7 @@ export class PdfCapturePanel {
       if (this.destroyed) return;
       const number = normalizeBoardPages(result.classroom.boardPages).findIndex((page) => page.id === result.pageId) + 1;
       this.clearCapture(); this.setBrowsing(true);
-      this.message(`已新增學生第 ${number} 頁，學生可開啟作答。${result.reconciliationError ? "名單同步尚未完成，請重新開啟課堂設定以補齊新加入學生的頁面。" : ""}`);
+      this.message(`已新增學生第 ${number} 頁、老師講解第 ${result.lecturePageNumber} 頁，可翻頁開啟題目。${result.reconciliationError ? "名單同步尚未完成，請重新開啟課堂設定以補齊新加入學生的頁面。" : ""}`);
       this.onSuccess?.(result);
     } catch (error) {
       const known = typeof error.message === "string" && /[\u3400-\u9fff]/.test(error.message);

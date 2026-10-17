@@ -5,6 +5,7 @@ import { serverNow, isClassroomExpired } from "../utils/classroomExpiration.js";
 import { CAPTURE_ID, PDF_LIMITS, validateCapture } from "../pdf/limits.js";
 import { reconcileClassBoardPages } from "./pageRepository.js";
 import { normalizeCapturePlacement } from "../pdf/placement.js";
+import { FIRST_LECTURE_PAGE, lecturePages } from "./lectureRepository.js";
 
 let studentSession;
 
@@ -44,20 +45,31 @@ async function readClass(classId, uid) {
   return value;
 }
 
-export function buildCaptureDispatch(classId, classroom, students, operation) {
+function captureBackground(classId, operation) {
+  const { pageId, asset } = operation;
+  return { type: "rtdb-capture", classId, assetId: pageId, ...normalizeCapturePlacement(operation.placement), updatedAt: asset.createdAt, updatedBy: asset.createdBy };
+}
+
+export function buildCaptureDispatch(classId, classroom, students, operation, lectureBoard = {}) {
   const { pageId, asset } = operation;
   const order = Math.max(0, ...Object.values(classroom.boardPages || {}).map((page) => Number(page.order) || 0)) + 1;
-  const page = { id: pageId, order, createdAt: asset.createdAt, createdBy: asset.createdBy, backgroundImage: { type: "rtdb-capture", classId, assetId: pageId, ...normalizeCapturePlacement(operation.placement), updatedAt: asset.createdAt, updatedBy: asset.createdBy } };
+  const page = { id: pageId, order, createdAt: asset.createdAt, createdBy: asset.createdBy, backgroundImage: captureBackground(classId, operation) };
   const changes = { [`classMaterials/${classId}/${pageId}`]: asset, [`classes/${classId}/boardPages/${pageId}`]: page, [`classes/${classId}/updatedAt`]: serverNow() };
   for (const student of students) changes[`boardPages/${student.boardToken}/${pageId}`] = page;
+  const base = `lectureBoards/${classId}`, index = lectureBoard.pageIndex || {};
+  // Append independently: teachers may already have extra explanation pages.
+  changes[`${base}/pageIndex/${pageId}`] = { ...page, order: Math.max(0, ...Object.values(index).map((item) => Number(item.order) || 0)) + 1 };
+  changes[`${base}/meta/updatedAt`] = serverNow();
+  if (!lectureBoard.meta) changes[`${base}/meta/createdAt`] = asset.createdAt;
+  if (!index[FIRST_LECTURE_PAGE]) changes[`${base}/pageIndex/${FIRST_LECTURE_PAGE}`] = { id: FIRST_LECTURE_PAGE, order: 0, createdAt: asset.createdAt, createdBy: asset.createdBy };
   return changes;
 }
 
 async function wasCommitted(classId, operation) {
-  const [asset, page] = await Promise.all([get(ref(database, `classMaterials/${classId}/${operation.pageId}`)), get(ref(database, `classes/${classId}/boardPages/${operation.pageId}`))]);
-  const saved = asset.val(), savedPage = page.val();
-  if (!saved && !savedPage) return false;
-  if (!saved || !savedPage || !Object.keys(operation.asset).every((key) => saved[key] === operation.asset[key]) || savedPage.backgroundImage?.assetId !== operation.pageId || savedPage.backgroundImage?.classId !== classId) throw new Error("派送資料不一致，請重新載入課堂確認。");
+  const [asset, page, lecture] = await Promise.all([get(ref(database, `classMaterials/${classId}/${operation.pageId}`)), get(ref(database, `classes/${classId}/boardPages/${operation.pageId}`)), get(ref(database, `lectureBoards/${classId}/pageIndex/${operation.pageId}`))]);
+  const saved = asset.val(), savedPage = page.val(), savedLecture = lecture.val(), background = captureBackground(classId, operation);
+  if (!saved && !savedPage && !savedLecture) return false;
+  if (!saved || !savedPage || !savedLecture || !Object.keys(operation.asset).every((key) => saved[key] === operation.asset[key]) || ![savedPage, savedLecture].every((item) => item.id === operation.pageId && Object.keys(background).every((key) => item.backgroundImage?.[key] === background[key]))) throw new Error("派送資料不一致，請重新載入課堂確認。");
   return true;
 }
 
@@ -69,7 +81,8 @@ async function dispatch(classId, operation, uid) {
     if (await wasCommitted(classId, operation)) break;
     if (Object.values(classroom.boardPages || {}).filter((page) => page.backgroundImage?.type === "rtdb-capture").length >= PDF_LIMITS.materials) throw new Error("每課堂最多派送 20 張截圖。");
     const students = (await Promise.all(Object.keys(classroom.studentOrder || {}).map(async (id) => ({ id, ...(await get(ref(database, `students/${id}`))).val() })))).filter((s) => s.classId === classId && s.enabled && s.boardToken);
-    try { await update(ref(database), buildCaptureDispatch(classId, classroom, students, operation)); break; }
+    const [meta, pageIndex] = await Promise.all([get(ref(database, `lectureBoards/${classId}/meta`)), get(ref(database, `lectureBoards/${classId}/pageIndex`))]);
+    try { await update(ref(database), buildCaptureDispatch(classId, classroom, students, operation, { meta: meta.val(), pageIndex: pageIndex.val() })); break; }
     catch (error) {
       // A rejected/ambiguous response must be read back using the same operation ID.
       if (await wasCommitted(classId, operation)) break;
@@ -80,7 +93,10 @@ async function dispatch(classId, operation, uid) {
   try { await reconcileClassBoardPages(classId); } catch { reconciliationError = true; }
   const current = (await get(ref(database, `classes/${classId}`))).val();
   if (!current?.boardPages?.[operation.pageId]) throw new Error("教材已提交，但課堂頁面已變更，請重新載入確認。");
-  return { pageId: operation.pageId, classroom: current, reconciliationError };
+  const index = (await get(ref(database, `lectureBoards/${classId}/pageIndex`))).val();
+  const lecturePageNumber = lecturePages(index).findIndex((page) => page.id === operation.pageId) + 1;
+  if (!lecturePageNumber) throw new Error("教材已提交，但講解頁面已變更，請重新載入確認。");
+  return { pageId: operation.pageId, classroom: current, lecturePageNumber, reconciliationError };
 }
 
 export function dispatchCapture(classId, operation, uid) {
