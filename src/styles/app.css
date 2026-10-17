@@ -1552,15 +1552,29 @@ dialog form {
 .lecture-workspace > .board-shell { min-width: 0; }
 .pdf-panel { flex: 0 0 var(--pdf-panel-width, 35%); min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #fff; border-right: 1px solid #c3d2da; }
 .pdf-panel[hidden], .pdf-splitter[hidden] { display: none; }
-.pdf-panel-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem .7rem .3rem; }
+.pdf-panel-head { position: relative; display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: .5rem; padding: .35rem .7rem; }
 .pdf-panel-head h2 { margin: 0; font-size: 1.05rem; }
 .pdf-panel button { min-height: 44px; padding: .4rem .55rem; font-size: .85rem; }
+.pdf-head-actions { display: flex; align-items: center; gap: .25rem; }
+.pdf-help summary { display: flex; align-items: center; justify-content: center; width: 44px; min-height: 44px; border-radius: 8px; color: var(--navy); font-size: 1.3rem; cursor: pointer; list-style: none; }
+.pdf-help summary::-webkit-details-marker { display: none; }
+.pdf-help summary:hover, .pdf-help[open] summary { background: #edf3f5; }
+.pdf-help-content { position: absolute; top: 100%; left: .5rem; right: .5rem; z-index: 12; padding: .7rem; border: 1px solid var(--border); border-radius: 10px; background: #fff; box-shadow: var(--shadow); color: var(--muted); font-size: .8rem; line-height: 1.6; }
+.pdf-help-content p { margin: 0 0 .5rem; }
+.pdf-help-content p:last-child { margin-bottom: 0; }
 .pdf-panel-hint { margin: .3rem .7rem; color: var(--muted); font-size: .78rem; line-height: 1.5; }
-.pdf-panel-tools { flex: 0 1 auto; min-height: 44px; max-height: 42%; overflow: auto; padding: 0 .7rem .3rem; }
-.pdf-panel-tools .pdf-toolbar { gap: .35rem; margin: .3rem 0; }
-.pdf-panel-tools .pdf-panel-hint { margin: .3rem 0; }
-.pdf-page-jump { display: flex; align-items: center; gap: .3rem; font-size: .85rem; white-space: nowrap; }
-.pdf-page-jump input { width: 4.5rem; min-height: 44px; padding: .3rem; }
+.pdf-panel-tools { position: relative; flex: 0 0 auto; min-width: 0; padding: 0 .5rem .3rem; border-bottom: 1px solid var(--border); }
+.pdf-panel-tools .pdf-toolbar { flex-wrap: nowrap; gap: .25rem; margin: 0; padding: .2rem 0; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.pdf-panel-tools .pdf-toolbar > *, .pdf-page-controls > * { flex: 0 0 auto; }
+.pdf-panel-tools .pdf-toolbar button { min-width: 44px; padding: .35rem .4rem; white-space: nowrap; }
+.pdf-page-controls { display: flex; align-items: center; gap: .1rem; }
+.pdf-page-jump { display: flex; align-items: center; gap: .1rem; font-size: .8rem; white-space: nowrap; }
+.pdf-page-jump input { width: 3rem; min-height: 44px; padding: .3rem .15rem; text-align: center; font-variant-numeric: tabular-nums; appearance: textfield; -moz-appearance: textfield; }
+.pdf-page-jump input::-webkit-inner-spin-button, .pdf-page-jump input::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
+.pdf-panel-tools [data-zoom-toggle] { min-width: 56px; font-variant-numeric: tabular-nums; }
+.pdf-panel button.pdf-icon-tool { min-width: 44px; font-size: 1.2rem; }
+.pdf-zoom-menu { position: absolute; top: 100%; right: .5rem; z-index: 12; display: flex; align-items: center; gap: .25rem; padding: .4rem; border: 1px solid var(--border); border-radius: 10px; background: #fff; box-shadow: var(--shadow); }
+.pdf-toolbar :focus-visible, .pdf-help summary:focus-visible { outline: 2px solid #0376ad; outline-offset: -2px; }
 .pdf-panel output { min-width: 3.5rem; text-align: center; font-variant-numeric: tabular-nums; }
 .pdf-continuous-scroll { flex: 1 1 0; min-height: 80px; position: relative; overflow: auto; background: #e6edf0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; overflow-anchor: none; }
 .pdf-pages { position: relative; min-width: 100%; }

@@ -9,8 +9,8 @@ function makePanel() {
   const capture = { width: 1600, height: 800 }, placement = { scale: .65, x: .4, y: .5 };
   return Object.assign(Object.create(PdfCapturePanel.prototype), {
     classId: "test-class", uid: "teacher", online: true, visible: true, sequence: 0,
-    capture, editor: { value: placement }, isActive: () => true, controls: vi.fn(), message: vi.fn(), setBrowsing: vi.fn(), onSuccess: vi.fn(),
-    dialog: { open: true, close: vi.fn(), showModal: vi.fn() }, viewer: { setVisible: vi.fn() },
+    capture, editor: { value: placement }, isActive: () => true, controls: vi.fn(), message: vi.fn(), setBrowsing: vi.fn(), setZoomMenu: vi.fn(), onSuccess: vi.fn(),
+    dialog: { open: true, close: vi.fn(), showModal: vi.fn() }, viewer: { setVisible: vi.fn() }, $: () => ({}),
     clearCapture: vi.fn(function () { this.capture = this.operation = null; })
   });
 }
@@ -23,7 +23,7 @@ beforeEach(() => {
 function makeLoadPanel() {
   const panel = makePanel(), elements = new Map();
   panel.capture = null;
-  panel.$ = (selector) => { if (!elements.has(selector)) elements.set(selector, {}); return elements.get(selector); };
+  panel.$ = (selector) => { if (!elements.has(selector)) elements.set(selector, { setAttribute: vi.fn() }); return elements.get(selector); };
   panel.session = { save: vi.fn(async () => {}), remember: vi.fn(), clear: vi.fn(async () => {}) };
   panel.viewer = { zoom: 1, setDocument: vi.fn(async () => {}), restoreView: vi.fn(function (view) { this.zoom = view.zoom; }), getView: () => ({ zoom: 1, anchor: null, left: 0 }) };
   panel.destroyPdf = vi.fn(async () => { panel.pdf = panel.loadingTask = null; });
