@@ -9,6 +9,7 @@ import { claimTeacherInvite } from "../firebase/teacherAccessRepository.js";
 import { ensureClassDisplay, projectDisplay, stopDisplay, updateProjectedPage, watchDisplay } from "../firebase/displayRepository.js";
 import { BoardEngine } from "../canvas/BoardEngine.js";
 import { renderToolSelection } from "../canvas/toolbar.js";
+import { initToolbarIcons, renderSmoothingControl, renderToolbarState } from "../canvas/toolbarIcons.js";
 import { StickyNotesLayer } from "../notes/StickyNotesLayer.js";
 import { StudentTextLayer } from "../text/StudentTextLayer.js";
 import { normalizeGridSize, paginateStudents, prioritizePinned } from "../monitor/studentView.js";
@@ -26,6 +27,7 @@ import { downloadBlob, renderPagePng } from "../teacher/classroomExporter.js";
 const classId = param("class"), inviteToken = param("invite");
 const grid = document.querySelector("#monitorGrid"), state = document.querySelector("#monitorState"), dialog = document.querySelector("#reviewDialog");
 const monitorToolbar = document.querySelector("#monitorToolbar"), showMonitorToolbar = document.querySelector("#showMonitorToolbar"), smoothingButton = document.querySelector("#toggleSmoothing");
+initToolbarIcons(dialog);
 let user, classroom, students = [], presence = {}, page = 0, gridSize = loadGridSize(), teacherSmoothing = loadTeacherSmoothing();
 const previews = new PreviewRegistry(), metaSubscriptions = new Map(), rosterSubscriptions = new Map();
 const drawingSettings = { tool: "pen", color: "#000000" };
@@ -49,12 +51,17 @@ function monitoredPage(student) {
   if (student.answerPageId !== id) { student.answerPageId = id; student.hasAnswer = undefined; }
   return id;
 }
-function renderSmoothingButton() { smoothingButton.classList.toggle("active", teacherSmoothing); smoothingButton.setAttribute("aria-pressed", String(teacherSmoothing)); smoothingButton.setAttribute("aria-label", teacherSmoothing ? "關閉手寫平滑" : "開啟手寫平滑"); smoothingButton.querySelector("span").textContent = `平滑：${teacherSmoothing ? "開" : "關"}`; }
+function renderSmoothingButton() { renderSmoothingControl(smoothingButton, teacherSmoothing); }
+function renderLockButton() {
+  const locked = Boolean(currentStudent?.locked);
+  renderToolbarState(document.querySelector("#toggleLock"), { label: locked ? "解鎖白板" : "鎖定白板", pressed: locked, icon: locked ? "lock" : "unlock" });
+}
 function renderProjectionControls() {
   const active = Boolean(displayState?.active);
   document.querySelector("#stopProjection").disabled = !active;
   document.querySelector("#stopReviewProjection").disabled = !active;
-  document.querySelector("#projectReview").textContent = active && displayState.studentId === currentStudent?.id && displayState.followStudent ? "投影中（最近書寫頁）" : "投影最近書寫頁";
+  const projecting = Boolean(active && displayState.studentId === currentStudent?.id && displayState.followStudent);
+  renderToolbarState(document.querySelector("#projectReview"), { label: projecting ? "投影中（最近書寫頁）" : "投影最近書寫頁", pressed: projecting });
 }
 function connectDisplay(token) {
   if (!token || token === watchedDisplayToken) return;
@@ -244,11 +251,12 @@ function stopReviewPage() { clearBackgroundImage(document.querySelector("#review
 
 function renderReviewPageControls() {
   if (!currentStudent) return;
-  document.querySelector("#toggleLock").textContent = currentStudent.locked ? "解鎖白板" : "鎖定白板";
+  renderLockButton();
   document.querySelector("#reviewPresence").textContent = presence[currentStudent.id]?.online ? (presence[currentStudent.id]?.drawing ? "書寫中" : "在線") : "離線";
   const pages = classPages(); let index = pages.findIndex((item) => item.id === currentReviewPageId);
   if (index < 0) { index = 0; currentReviewPageId = pages[0].id; }
-  document.querySelector("#reviewPageLabel").textContent = `第 ${index + 1} / ${pages.length} 頁`;
+  document.querySelector("#reviewPageLabel").textContent = `${index + 1} / ${pages.length}`;
+  document.querySelector("#reviewPageLabel").setAttribute("aria-label", `第 ${index + 1} 頁，共 ${pages.length} 頁`);
   document.querySelector("#projectStudentPage").title = `讓這位學生跳到老師目前批注的第 ${index + 1} 頁`;
   document.querySelector("#projectStudentPage").setAttribute("aria-label", `幫學生翻到目前批注的第 ${index + 1} 頁`);
   document.querySelector("#reviewPrevPage").disabled = index <= 0; document.querySelector("#reviewNextPage").disabled = index >= pages.length - 1;
@@ -295,7 +303,7 @@ function openReviewPage(pageId) {
 }
 
 async function openReview(student, pageId) {
-  reviewScroll = window.scrollY; currentStudent = student; clearPreviews(); document.querySelector("#reviewName").textContent = `${student.seatNumber} ${student.displayName}`; document.querySelector("#reviewPresence").textContent = presence[student.id]?.online ? "在線" : "離線"; document.querySelector("#toggleLock").textContent = student.locked ? "解鎖白板" : "鎖定白板"; dialog.showModal(); openReviewPage(pageId);
+  reviewScroll = window.scrollY; currentStudent = student; clearPreviews(); document.querySelector("#reviewName").textContent = `${student.seatNumber} ${student.displayName}`; document.querySelector("#reviewPresence").textContent = presence[student.id]?.online ? "在線" : "離線"; renderLockButton(); renderProjectionControls(); dialog.showModal(); openReviewPage(pageId);
 }
 
 function closeReview() { stopReviewPage(); currentStudent = null; currentReviewPageId = null; dialog.close(); render(); requestAnimationFrame(() => window.scrollTo(0, reviewScroll)); }

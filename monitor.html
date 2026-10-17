@@ -75,35 +75,35 @@
     <dialog id="reviewDialog" class="review-dialog">
       <div class="review-head">
         <div class="review-student-controls">
-          <button id="closeReview" class="ghost" type="button">返回多格</button>
+          <button id="closeReview" data-icon="prev" aria-label="返回多格監看" class="ghost" type="button">返回</button>
           <strong id="reviewName"></strong>
-          <button id="projectStudentPage" class="primary" type="button" title="讓這位學生跳到老師目前批注的頁面">幫學生翻到本頁</button>
+          <button id="projectStudentPage" data-icon="followPage" aria-label="幫學生翻到目前批注的頁面" class="primary" type="button" title="讓這位學生跳到老師目前批注的頁面">翻頁</button>
           <span id="reviewPresence" class="badge"></span>
         </div>
-        <nav class="review-page-controls" aria-label="學生白板頁面">
-          <button id="reviewPrevPage" class="ghost" type="button">上一頁</button>
-          <strong id="reviewPageLabel">第 1 / 1 頁</strong>
-          <button id="reviewNextPage" class="ghost" type="button">下一頁</button>
+        <nav class="review-page-controls compact-page-controls" aria-label="學生白板頁面">
+          <button id="reviewPrevPage" data-icon="prev" aria-label="上一頁" class="ghost" type="button">上頁</button>
+          <strong id="reviewPageLabel">1 / 1</strong>
+          <button id="reviewNextPage" data-icon="next" aria-label="下一頁" class="ghost" type="button">下頁</button>
           <select id="insertPagePosition" aria-label="空白頁插入位置"></select>
-          <button id="insertBlankPage" class="primary" type="button">插入空白頁</button>
+          <button id="insertBlankPage" data-icon="addPage" aria-label="插入空白頁" class="primary" type="button">插頁</button>
         </nav>
       </div>
-      <div class="board-toolbar review-toolbar" role="toolbar" aria-label="老師批注工具">
+      <div class="board-toolbar review-toolbar compact-toolbar" role="toolbar" aria-label="老師批注工具，可左右滑動" tabindex="0">
         <div class="pen-color-group" role="group" aria-label="畫筆顏色">
           <button type="button" data-tool="pen" data-pen-color="#000000" class="pen-color active" style="--pen-color:#000000" aria-label="黑色畫筆" title="黑色畫筆" aria-pressed="true"></button>
           <button type="button" data-tool="pen" data-pen-color="#2563eb" class="pen-color" style="--pen-color:#2563eb" aria-label="藍色畫筆" title="藍色畫筆" aria-pressed="false"></button>
           <button type="button" data-tool="pen" data-pen-color="#16a34a" class="pen-color" style="--pen-color:#16a34a" aria-label="綠色畫筆" title="綠色畫筆" aria-pressed="false"></button>
           <button type="button" data-tool="pen" data-pen-color="#ef4444" class="pen-color" style="--pen-color:#ef4444" aria-label="紅色畫筆" title="紅色畫筆" aria-pressed="false"></button>
         </div>
-        <button data-tool="eraser" aria-pressed="false">⌫<span>橡皮擦</span></button>
+        <button data-tool="eraser" data-icon="eraser" aria-label="整筆橡皮擦" aria-pressed="false">擦除</button>
         <div class="zoom-controls" role="group" aria-label="白板縮放">
-          <button id="reviewZoomOut" type="button" aria-label="縮小白板，每次 10%">− 縮小</button>
+          <button id="reviewZoomOut" data-icon="minus" type="button" aria-label="縮小白板，每次 10%">縮小</button>
           <output id="reviewZoomScale" aria-label="目前白板縮放比例" aria-live="polite">100%</output>
-          <button id="reviewZoomIn" type="button" aria-label="放大白板，每次 10%">＋ 放大</button>
-          <button id="reviewResetZoom" type="button" aria-label="重設白板縮放為 100%">100%</button>
+          <button id="reviewZoomIn" data-icon="plus" type="button" aria-label="放大白板，每次 10%">放大</button>
+          <button id="reviewResetZoom" data-icon="reset" type="button" aria-label="重設白板縮放為 100%">重設</button>
         </div>
-        <label class="brush-size-tool"
-          >筆刷
+        <label class="brush-size-tool" title="批注粗細"
+          ><span data-icon="width" aria-hidden="true"></span>
           <select id="reviewWidth" aria-label="批注粗細">
             <option value="1">極細</option>
             <option value="3">細</option>
@@ -115,19 +115,20 @@
             <option value="40">40 px</option>
           </select>
         </label>
-        <button id="projectReview" type="button">投影最近書寫頁</button>
-        <button id="stopReviewProjection" class="danger-outline" type="button" disabled>解除投影</button>
+        <button id="projectReview" data-icon="project" aria-label="投影最近書寫頁" aria-pressed="false" type="button">投影</button>
+        <button id="stopReviewProjection" data-icon="stopProject" aria-label="解除投影" class="danger-outline" type="button" disabled>解除</button>
         <button
           id="toggleSmoothing"
+          data-icon="smoothing"
           class="active"
           type="button"
           aria-pressed="true"
           aria-label="關閉手寫平滑"
         >
-          <span>平滑：開</span>
+          平滑
         </button>
-        <label class="note-color-tool"
-          >便條顏色
+        <label class="note-color-tool" title="新增便條貼顏色"
+          ><span data-icon="note" aria-hidden="true"></span>
           <select id="stickyColor" aria-label="新增便條貼顏色">
             <option value="yellow">淡黃</option>
             <option value="blue">淡藍</option>
@@ -135,12 +136,12 @@
             <option value="green">淡綠</option>
           </select>
         </label>
-        <button id="addStickyNote" type="button">+便條</button>
-        <button id="reviewUndo">復原</button>
-        <button id="reviewRedo">重做</button>
-        <button id="toggleLock">鎖定白板</button>
-        <button id="clearTeacher">清除批注</button>
-        <button id="exportPng">下載 PNG</button>
+        <button id="addStickyNote" data-icon="note" aria-label="新增便條貼" type="button">便條</button>
+        <button id="reviewUndo" data-icon="undo">復原</button>
+        <button id="reviewRedo" data-icon="redo">重做</button>
+        <button id="toggleLock" data-icon="unlock" aria-label="鎖定白板" aria-pressed="false">鎖定</button>
+        <button id="clearTeacher" data-icon="clear" aria-label="清除批注" class="danger-outline">清除</button>
+        <button id="exportPng" data-icon="download" aria-label="下載 PNG">下載</button>
 
       </div>
       <div class="review-body">

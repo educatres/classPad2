@@ -6,6 +6,7 @@ import { watchConnection } from "../firebase/connection.js";
 import { addLecturePage, clearLecturePage, ensureLectureBoard, subscribeLectureStrokes, watchLecturePages, writeLectureStroke } from "../firebase/lectureRepository.js";
 import { BoardEngine } from "../canvas/BoardEngine.js";
 import { renderToolSelection } from "../canvas/toolbar.js";
+import { initToolbarIcons, renderSmoothingControl } from "../canvas/toolbarIcons.js";
 import { LectureWriteQueue } from "../whiteboard/LectureWriteQueue.js";
 import { isClassroomExpired, watchClassroomExpiry } from "../utils/classroomExpiration.js";
 import { confirmAction, explainError, toast } from "../utils/ui.js";
@@ -17,6 +18,7 @@ const $ = (id) => document.getElementById(id), classId = param("class"), histori
 let user, classroom, engine, pages = [], pageId, pageOff, pagesOff, classOff, expiryOff, expirationRetryTimer, busy = false, stopped = false, online = false, fatal = false;
 let pdfPanel, pdfSession, openingPdf = false, requestedPdf = param("pdf") === "1";
 const message = $("lectureMessage"), toolbar = $("lectureToolbar"), stage = $("lectureStage"), badge = $("syncBadge");
+initToolbarIcons(toolbar);
 const queue = new LectureWriteQueue(renderSync);
 const drawingSettings = { tool: "pen", color: "#000000" };
 const connectionOff = watchConnection($("connectionBadge"));
@@ -67,7 +69,8 @@ function canChangePage() {
 }
 function renderPages() {
   const index = pages.findIndex((page) => page.id === pageId);
-  $("lecturePageLabel").textContent = `第 ${Math.max(0, index) + 1} / ${pages.length} 頁`;
+  $("lecturePageLabel").textContent = `${Math.max(0, index) + 1} / ${pages.length}`;
+  $("lecturePageLabel").setAttribute("aria-label", `第 ${Math.max(0, index) + 1} 頁，共 ${pages.length} 頁`);
   $("lecturePrevPage").disabled = index <= 0;
   $("lectureNextPage").disabled = index >= pages.length - 1;
 }
@@ -138,7 +141,7 @@ for (const button of toolbar.querySelectorAll("[data-tool]")) button.onclick = (
   renderToolSelection(toolbar, drawingSettings);
 };
 $("lectureWidth").onchange = (event) => engine?.setWidth(event.target.value);
-$("lectureSmoothing").onclick = (event) => { const enabled = event.currentTarget.getAttribute("aria-pressed") !== "true"; event.currentTarget.setAttribute("aria-pressed", String(enabled)); event.currentTarget.textContent = `平滑：${enabled ? "開" : "關"}`; engine?.setSmoothing(enabled); };
+$("lectureSmoothing").onclick = (event) => { const enabled = event.currentTarget.getAttribute("aria-pressed") !== "true"; renderSmoothingControl(event.currentTarget, enabled); engine?.setSmoothing(enabled); };
 $("lectureUndo").onclick = () => { finishInput(); engine?.undo(); };
 $("lectureRedo").onclick = () => { finishInput(); engine?.redo(); };
 $("lectureZoomOut").onclick = () => engine?.zoomBy(-.1);

@@ -8,6 +8,7 @@ import { getClassroomExpiresAt } from "../firebase/classroomRepository.js";
 import { watchClassroomLifetime } from "../firebase/classroomLifetime.js";
 import { BoardEngine } from "../canvas/BoardEngine.js";
 import { renderToolSelection } from "../canvas/toolbar.js";
+import { initToolbarIcons, renderSmoothingControl } from "../canvas/toolbarIcons.js";
 import { StickyNotesLayer } from "../notes/StickyNotesLayer.js";
 import { StudentTextLayer } from "../text/StudentTextLayer.js";
 import { normalizeBoardPages } from "../whiteboard/pages.js";
@@ -24,6 +25,7 @@ const message = document.querySelector("#boardMessage");
 const stage = document.querySelector("#boardStage");
 const toolbar = document.querySelector("#studentToolbar");
 const smoothingButton = document.querySelector("#studentSmoothing");
+initToolbarIcons(document);
 const sync = document.querySelector("#syncBadge");
 let user, student, engine, stickyNotes, textLayer, presenceStop, expirationOff, expired = false;
 let pages = normalizeBoardPages();
@@ -49,11 +51,7 @@ function loadStudentSmoothing() {
 }
 
 function renderSmoothingButton() {
-  const enabled = drawingSettings.smoothing;
-  smoothingButton.classList.toggle("active", enabled);
-  smoothingButton.setAttribute("aria-pressed", String(enabled));
-  smoothingButton.setAttribute("aria-label", enabled ? "關閉手寫平滑" : "開啟手寫平滑");
-  smoothingButton.querySelector("span").textContent = `平滑：${enabled ? "開" : "關"}`;
+  renderSmoothingControl(smoothingButton, drawingSettings.smoothing);
 }
 
 watchConnection(document.querySelector("#connectionBadge"));
@@ -79,7 +77,8 @@ function setSync(text, type = "") {
 
 function renderPageControls() {
   const index = Math.max(0, pages.findIndex((page) => page.id === currentPageId));
-  document.querySelector("#studentPageLabel").textContent = `第 ${index + 1} / ${pages.length} 頁`;
+  document.querySelector("#studentPageLabel").textContent = `${index + 1} / ${pages.length}`;
+  document.querySelector("#studentPageLabel").setAttribute("aria-label", `第 ${index + 1} 頁，共 ${pages.length} 頁`);
   document.querySelector("#studentPrevPage").disabled = index <= 0;
   document.querySelector("#studentNextPage").disabled = index >= pages.length - 1;
 }

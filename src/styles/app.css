@@ -1543,11 +1543,78 @@ dialog form {
 .lecture-header { height: auto; min-height: 62px; flex-wrap: wrap; gap: .5rem; padding: .5rem .8rem; }
 .lecture-header > div:first-child { display: grid; min-width: 0; }
 .lecture-header nav { display: flex; flex-wrap: wrap; }
-.lecture-page .board-toolbar { flex-wrap: wrap; flex: 0 0 auto; max-height: 35dvh; overflow-y: auto; }
-.lecture-page .board-page-controls { flex-wrap: wrap; }
 .lecture-page .board-toolbar[hidden] { display: none; }
 .lecture-page #lectureMessage { position: relative; max-width: 100%; }
 .lecture-page .board-shell:has(#lectureMessage:not([hidden])) { align-content: start; gap: .5rem; }
+.board-toolbar.compact-toolbar {
+  min-height: 62px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #6f8796 #edf3f5;
+}
+.compact-toolbar > * { flex: 0 0 auto; }
+.compact-toolbar::-webkit-scrollbar { height: 8px; }
+.compact-toolbar button[data-icon],
+.compact-page-controls button[data-icon],
+.review-head button[data-icon] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 8px;
+  border-radius: 9px;
+}
+[data-icon] svg { display: block; flex: 0 0 22px; width: 22px; height: 22px; pointer-events: none; }
+.compact-toolbar .pen-color-group { gap: 8px; padding: 4px; }
+.board-toolbar.compact-toolbar label {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0 2px;
+}
+.compact-toolbar select {
+  width: 68px;
+  min-width: 68px;
+  height: 44px;
+  padding: 4px;
+  margin: 0;
+  font-size: 16px;
+}
+.compact-toolbar .zoom-controls,
+.compact-toolbar .board-page-controls,
+.compact-page-controls { flex-wrap: nowrap; gap: 2px; white-space: nowrap; }
+.compact-toolbar .zoom-controls output,
+.compact-toolbar .board-page-controls strong,
+.compact-page-controls strong {
+  min-width: 4.5ch;
+  text-align: center;
+  font-size: .85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.compact-toolbar button.primary { background: var(--navy); color: #fff; }
+.compact-toolbar button.danger-outline { background: #fff2f2; color: #a72d2d; }
+.compact-toolbar :focus-visible { outline: 2px solid #bd6500; outline-offset: -2px; }
+.board-toolbar.compact-toolbar button.pen-color:focus-visible { outline-offset: 1px; }
+.review-head { flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px; gap: 8px; }
+.review-student-controls { flex-wrap: nowrap; flex: 0 0 auto; white-space: nowrap; }
+.review-page-controls { order: initial; width: auto; flex: 0 0 auto; overflow: visible; }
+.review-page-controls select { min-height: 44px; }
 .lecture-workspace { display: flex; flex: 1 1 0; min-height: 0; min-width: 0; position: relative; overflow: hidden; }
 .lecture-workspace > .board-shell { min-width: 0; }
 .pdf-panel { flex: 0 0 var(--pdf-panel-width, 35%); min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #fff; border-right: 1px solid #c3d2da; }
